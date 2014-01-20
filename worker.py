@@ -53,14 +53,19 @@ class WhatsappListenerClient:
 		return r.headers['content-type']
 
 	def onImageReceived(self, messageId, jid, preview, url, size, wantsReceipt, isBroadCast):
-		post_url = 'http://localhost:3000/upload'		
+		phone_number = jid.split("@")[0]
+
+		post_url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		post_url = post_url + "/upload"
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
-		data = { "message" : { 'url' : url, 'phone_number' : jid } }
+		data = { "message" : { 'url' : url, 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
 		r = requests.post(post_url, data=json.dumps(data), headers=headers)
 		# print("Status code %s" %r.status_code)
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
+
+		self.checkProfilePic(jid)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		print("Url %s" %filePath)
@@ -68,6 +73,17 @@ class WhatsappListenerClient:
 		url = url + "/contacts/" + jid.split("@")[0] + "/upload"
 		files = {'file': open(filePath, 'rb')}
 		r = requests.post(url, files=files)
+
+	def checkProfilePic(self, jid):
+		phone_number = jid.split("@")[0]
+		url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		get_url = url + "/profile?phone_number=" + phone_number
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		r = requests.get(get_url, headers=headers)
+		response = r.json()
+		
+		if response['profile_pic'] == '/profile_pics/original/missing.png':
+			self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 
 
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
@@ -83,12 +99,12 @@ class WhatsappListenerClient:
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
-		get_url = url + "/profile?phone_number=" + phone_number
-		r = requests.get(get_url, headers=headers)
-		response = r.json()
+		# get_url = url + "/profile?phone_number=" + phone_number
+		# r = requests.get(get_url, headers=headers)
+		# response = r.json()
 		
-		if response['profile_pic'] == '/profile_pics/original/missing.png':
-			self.methodsInterface.call("contact_getProfilePicture", (jid,))	
+		# if response['profile_pic'] == '/profile_pics/original/missing.png':
+		# 	self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 	
 
 
