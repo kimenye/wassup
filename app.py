@@ -52,11 +52,10 @@ def send():
 	msg = request.json['message']
 	app.logger.info('TO: %s' %phone_number)
 	app.logger.info('MSG: %s' %msg)
-	
+	# app.logger.info('IN send message %s' %request.data)
 
 	q = Queue(connection=conn)
 	job = q.enqueue(send_message, phone_number, msg)
 
-	app.logger.info('MSG %s' %job.result)
-	
-	return jsonify(status="ok", to=request.json['phone_number'], result=job.result)
+
+	return jsonify(status="ok")
