@@ -25,6 +25,8 @@ class WhatsappListenerClient:
 		self.signalsInterface.registerListener("auth_success", self.onAuthSuccess)
 		self.signalsInterface.registerListener("auth_fail", self.onAuthFailed)
 		self.signalsInterface.registerListener("disconnected", self.onDisconnected)
+		# self.signalsInterface.registerListener("contact_gotProfilePictureId", self.onGotProfilePictureId)
+		self.signalsInterface.registerListener("contact_gotProfilePicture", self.onGotProfilePicture)
 		
 		self.cm = connectionManager
 	
@@ -49,38 +51,44 @@ class WhatsappListenerClient:
 	def getContentType(self, url):
 		r = requests.get(url)
 		return r.headers['content-type']
-		# page = urllib2.urlopen(url)
-    	# pageHeaders = page.headers
-    	# contentType = pageHeaders.getheader('content-type')
-    	
 
 	def onImageReceived(self, messageId, jid, preview, url, size, wantsReceipt, isBroadCast):
-		print("Url is %s" %url)
-		print("Wants receipt %s" %wantsReceipt)
-
 		post_url = 'http://localhost:3000/upload'		
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
-		# headers = { 'Content-type' : contentType }
-		# files = {'image': ('image.jpeg', cStringIO.StringIO(preview))}
-
-		# payload = { 'content_type' : contentType }
 		data = { "message" : { 'url' : url, 'phone_number' : jid } }
 		r = requests.post(post_url, data=json.dumps(data), headers=headers)
-		print("Status code %s" %r.status_code)
+		# print("Status code %s" %r.status_code)
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
+
+	def onGotProfilePicture(self, jid, imageId, filePath):
+		print("Url %s" %filePath)
+		url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		url = url + "/contacts/" + jid.split("@")[0] + "/upload"
+		files = {'file': open(filePath, 'rb')}
+		r = requests.post(url, files=files)
+
 
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
 		formattedDate = datetime.datetime.fromtimestamp(timestamp).strftime('%d-%m-%Y %H:%M')
-		print("%s [%s]:%s"%(jid, formattedDate, messageContent))
-
+				
+		phone_number = jid.split("@")[0]
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
-		data = { "message" : { "text" : messageContent, "phone_number" : jid, "user_id" : 1, "message_type" : "text" }}
-		r = requests.post("http://localhost:3000/messages", data=json.dumps(data), headers=headers)
+		data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName }}
+		url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		post_url = url + "/messages"
+		r = requests.post(post_url, data=json.dumps(data), headers=headers)
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
+
+		get_url = url + "/profile?phone_number=" + phone_number
+		r = requests.get(get_url, headers=headers)
+		response = r.json()
+		
+		if response['profile_pic'] == '/profile_pics/original/missing.png':
+			self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 	
 
 

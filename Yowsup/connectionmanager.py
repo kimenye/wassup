@@ -448,6 +448,8 @@ class YowsupConnectionManager:
 		bodyNode = ProtocolTreeNode("body",None,None,status);
 		messageNode = self.getMessageNode("s.us",bodyNode)
 		self._writeNode(messageNode);
+
+		self._d("node %s" %messageNode)
 		
 		return messageNode.getAttributeValue("id")
 		
@@ -707,7 +709,7 @@ class ReaderThread(threading.Thread):
 		#self.socket = connection
 		self.terminateRequested = False
 		self.disconnectedSent = False
-		self.timeout = 180
+		self.timeout = 500
 		self.selectTimeout = 3
 		self.requests = {};
 		self.lock = threading.Lock()
@@ -1046,6 +1048,7 @@ class ReaderThread(threading.Thread):
 
 
 	def parseGetPictureIds(self,node):
+		self._d("Parsing getPictureIds")
 		jid = node.getAttributeValue("from");
 		groupNode = node.getChild("list")
 		#self._d(groupNode.toString())
@@ -1112,6 +1115,8 @@ class ReaderThread(threading.Thread):
 
 	def parseMessage(self,messageNode):
 
+		# notifyNode = messageNode.getChild("notify");
+		# name = notifyNode.getAttributeValue("name");
 
 		bodyNode = messageNode.getChild("body");
 #		offlineNode = messageNode.getChild("offline")
