@@ -1,6 +1,7 @@
 from Yowsup.connectionmanager import YowsupConnectionManager
 from Yowsup.Common.utilities import Utilities
 import base64, time, os, requests, json
+# from app import Message
 
 
 class WhatsappListenerClient:
@@ -29,7 +30,6 @@ class WhatsappListenerClient:
 	def login(self, username, password):
 		self.app.logger.info('In Login')
 		self.username = username
-		# self.password = base64.b64decode(bytes(password.encode('utf-8')))
 		self.password = password
 
 		self.methodsInterface.call("auth_login", (username, self.password))

@@ -4,11 +4,14 @@ MarkupSafe==0.18
 Werkzeug==0.9.4
 gunicorn==18.0
 itsdangerous==0.23
+psycopg2==2.5.2
 python-dateutil==2.2
 pytz==2013.9
 redis==2.9.0
 requests==2.2.0
 rq==0.3.13
+rq-dashboard==0.3.3
+simplejson==3.3.2
 six==1.5.2
 times==0.6.2
 wsgiref==0.1.2
