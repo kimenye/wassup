@@ -147,6 +147,10 @@ class WhatsappListenerClient:
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		self.app.logger.info('Profile picture received')
+		url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		url = url + "/contacts/" + jid.split("@")[0] + "/upload"
+		files = {'file': open(filePath, 'rb')}
+		r = requests.post(url, files=files)
 
 app.whatsapp = WhatsappListenerClient(app, True, True)
 
