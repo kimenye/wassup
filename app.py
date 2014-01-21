@@ -4,6 +4,7 @@ from rq import Queue
 from messenger import conn
 import requests
 from WhatsappEchoClient import WhatsappEchoClient
+from WhatsappListenerClient import WhatsappListenerClient
 
 import logging, base64
 from logging import StreamHandler
@@ -16,6 +17,19 @@ app.logger.setLevel(logging.DEBUG)  # set the desired logging level here
 app.logger.addHandler(file_handler)
 
 
+app.whatsapp = WhatsappListenerClient(app, True, True)
+
+def listen():	
+	app.logger.info('Locked and ready to go')	
+	login = os.getenv('LOGIN')
+	password = os.getenv('PASSWORD')
+	password = base64.b64decode(bytes(password.encode('utf-8')))
+	app.logger.info("Login: %s" %login)
+	app.whatsapp.login(login, password)
+
+q = Queue(connection=conn)
+q.enqueue_call(func=listen, timeout=600)
+
 @app.route('/')
 def hello():
 	print("The request is in")
@@ -23,7 +37,7 @@ def hello():
 	return 'Yo Wassup!'
 
 def send_message(to,msg):
-	wa = WhatsappEchoClient(to.encode('utf8'), msg.encode('utf8'), False)
+	wa = WhatsappEchoClient(self, to.encode('utf8'), msg.encode('utf8'), False)
 	login = "254733171036"
 	password = "+rYGoEyk7y9QBGLCSHuPS2VVZNw="
 	password = base64.b64decode(bytes(password.encode('utf-8')))
@@ -50,12 +64,13 @@ def initialize():
 def send():
 	phone_number = request.json['phone_number']
 	msg = request.json['message']
-	app.logger.info('TO: %s' %phone_number)
-	app.logger.info('MSG: %s' %msg)
-	# app.logger.info('IN send message %s' %request.data)
+	# app.logger.info('TO: %s' %phone_number)
+	# app.logger.info('MSG: %s' %msg)
+	# # app.logger.info('IN send message %s' %request.data)
 
-	q = Queue(connection=conn)
-	job = q.enqueue(send_message, phone_number, msg)
+	# q = Queue(connection=conn)
+	# job = q.enqueue(send_message, phone_number, msg)
+	app.whatsapp.sendMessage(phone_number, msg)
 
 
 	return jsonify(status="ok")
