@@ -15,6 +15,7 @@ eggs
 env
 parts
 var
+db
 develop-eggs
 .installed.cfg
 

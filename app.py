@@ -20,7 +20,7 @@ file_handler = StreamHandler()
 app.logger.setLevel(logging.DEBUG)  # set the desired logging level here
 app.logger.addHandler(file_handler)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db/dev.db'
 db = SQLAlchemy(app)
 app.db = db
 
@@ -35,6 +35,19 @@ class Message(db.Model):
 		self.phone_number = phone_number
 		self.message = message
 		self.sent = sent
+
+class Job(db.Model):
+	id = db.Column(db.Integer, primary_key=True)
+	method = db.Column(db.String(255))
+	targets = db.Column(db.String(255))
+	args = db.Column(db.String(255))
+	sent = db.Column(db.Boolean())
+
+	def __init__(self, method, targets, sent, args):
+		self.method = method
+		self.targets = targets
+		self.sent = sent
+		self.args = args
 
 class WhatsappListenerClient:
 
@@ -55,6 +68,7 @@ class WhatsappListenerClient:
 		self.signalsInterface.registerListener("disconnected", self.onDisconnected)
 
 		self.signalsInterface.registerListener("contact_gotProfilePicture", self.onGotProfilePicture)
+		self.signalsInterface.registerListener("profile_setStatusSuccess", self.onSetStatusSuccess)
 		
 		self.cm = connectionManager
 		self.done = False
@@ -65,19 +79,36 @@ class WhatsappListenerClient:
 		self.password = password
 
 		self.methodsInterface.call("auth_login", (username, self.password))
+		self.methodsInterface.call("presence_sendAvailable", ())
 
 		while not self.done:
-			self.app.logger.info('Waiting')		
+			# self.app.logger.info('Waiting')		
 			messages = Message.query.filter_by(sent=False).all()			
-			self.app.logger.info("Messages %s" % len(messages))
+			if len(messages) > 0:
+				self.app.logger.info("Messages %s" % len(messages))
 			
 			for message in messages:
 				self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
 				message.sent = True
 
+			self.seekJobs()
+
 			self.app.db.session.commit()
 
-			time.sleep(0.5)
+			time.sleep(5)
+
+	def seekJobs(self):
+		# self.app.logger.info("Seeking jobs")
+		jobs = Job.query.filter_by(sent=False).all()
+		if len(jobs) > 0:
+			self.app.logger.info("Jobs %s" % len(jobs))
+
+		for job in jobs:
+			if job.method == "profile_setStatus":
+				self.methodsInterface.call(job.method.encode('utf8'), (job.args.encode('utf8'),))
+				job.sent = True
+		
+		self.app.db.session.commit()				
 
 	def sendMessage(self, target, text):
 		self.app.logger.info("To send %s " %text)
@@ -86,6 +117,9 @@ class WhatsappListenerClient:
 		self.done = True
 		self.app.logger.info("Self %s" %self.done)
 		self.methodsInterface.call("message_send", (jid, text))
+
+	def onSetStatusSuccess(self,jid,messageId):
+		self.app.logger.info("Set the profile message for %s - %s" %(jid, messageId))
 
 	def onAuthSuccess(self, username):
 		self.app.logger.info('Authenticated')
@@ -97,6 +131,7 @@ class WhatsappListenerClient:
 	def onDisconnected(self, reason):
 		self.app.logger.info('Disconnected')
 		# self.login(self.username, self.password)
+		self.done = True
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		self.app.logger.info('Got profile picture')
@@ -163,12 +198,24 @@ def listen():
 	app.whatsapp.login(login, password)
 
 q = Queue(connection=conn)
-q.enqueue_call(func=listen, timeout=600)
+q.enqueue_call(func=listen, timeout=3600)
 
 @app.route('/')
 def hello():
 	app.logger.info('Hello World!')
 	return 'Yo Wassup!'
+
+@app.route('/job', methods=['POST'])
+def job():
+	method = request.json['job_type']
+	args = request.json['args']
+	job = Job(method,None,False,args)
+	app.logger.info('Job create %s' %method)
+	db.session.add(job)
+	db.session.commit()
+	app.logger.info("Job created %s" %job.id)
+
+	return jsonify(status='ok')
 
 @app.route('/send', methods=['POST', 'GET'])
 def send():
