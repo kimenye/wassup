@@ -38,6 +38,7 @@ class Message(db.Model):
 
 class Job(db.Model):
 	id = db.Column(db.Integer, primary_key=True)
+	objectId = db.Column(db.Integer)
 	method = db.Column(db.String(255))
 	targets = db.Column(db.String(255))
 	args = db.Column(db.String(255))
@@ -69,6 +70,10 @@ class WhatsappListenerClient:
 
 		self.signalsInterface.registerListener("contact_gotProfilePicture", self.onGotProfilePicture)
 		self.signalsInterface.registerListener("profile_setStatusSuccess", self.onSetStatusSuccess)
+		self.signalsInterface.registerListener("group_createSuccess", self.onGroupCreateSuccess)
+		self.signalsInterface.registerListener("group_createFail", self.onGroupCreateFail)
+		self.signalsInterface.registerListener("group_gotInfo", self.onGroupGotInfo)
+		self.signalsInterface.registerListener("group_addParticipantsSuccess", self.onGroupAddParticipantsSuccess)
 		
 		self.cm = connectionManager
 		self.done = False
@@ -98,7 +103,6 @@ class WhatsappListenerClient:
 			time.sleep(5)
 
 	def seekJobs(self):
-		# self.app.logger.info("Seeking jobs")
 		jobs = Job.query.filter_by(sent=False).all()
 		if len(jobs) > 0:
 			self.app.logger.info("Jobs %s" % len(jobs))
@@ -106,6 +110,13 @@ class WhatsappListenerClient:
 		for job in jobs:
 			if job.method == "profile_setStatus":
 				self.methodsInterface.call(job.method.encode('utf8'), (job.args.encode('utf8'),))
+				job.sent = True
+			elif job.method == "group_create":
+				self.methodsInterface.call(job.method.encode('utf8'), (job.args.encode('utf8'),))
+				job.sent = True
+			elif job.method == "group_addParticipants":
+				params = job.args.encode('utf8').split(",")
+				self.methodsInterface.call(job.method.encode('utf8'), (params[0], [params[1] + "@s.whatsapp.net"],))
 				job.sent = True
 		
 		self.app.db.session.commit()				
@@ -117,6 +128,28 @@ class WhatsappListenerClient:
 		self.done = True
 		self.app.logger.info("Self %s" %self.done)
 		self.methodsInterface.call("message_send", (jid, text))
+
+
+	def onGroupAddParticipantsSuccess(self, groupJid, jid):
+		self.app.logger.info("Added participant %s" %jid)
+
+	def onGroupCreateSuccess(self, groupJid):
+		self.app.logger.info("Created with id %s" %groupJid)
+		self.methodsInterface.call("group_getInfo", (groupJid,))
+
+	def onGroupGotInfo(self,jid,owner,subject,subjectOwner,subjectTimestamp,creationTimestamp):
+		self.app.logger.info("Group info %s - %s" %(jid, subject))
+
+		url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		put_url = url + "/update_group"
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		data = { "name" : subject, "jid" : jid }
+
+		r = requests.post(put_url, data=json.dumps(data), headers=headers)
+		self.app.logger.info("Updated the group")
+
+	def onGroupCreateFail(self, errorCode):
+		self.app.logger.info("Error creating a group %s" %errorCode)
 
 	def onSetStatusSuccess(self,jid,messageId):
 		self.app.logger.info("Set the profile message for %s - %s" %(jid, messageId))
