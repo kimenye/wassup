@@ -84,9 +84,7 @@ class WhatsappListenerClient:
 		if response['profile_pic'] == '/profile_pics/original/missing.png':
 			self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 
-
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
-		formattedDate = datetime.datetime.fromtimestamp(timestamp).strftime('%d-%m-%Y %H:%M')
 				
 		phone_number = jid.split("@")[0]
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
@@ -99,12 +97,6 @@ class WhatsappListenerClient:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
 		self.checkProfilePic(jid)
-		# get_url = url + "/profile?phone_number=" + phone_number
-		# r = requests.get(get_url, headers=headers)
-		# response = r.json()
-		
-		# if response['profile_pic'] == '/profile_pics/original/missing.png':
-		# 	self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 	
 
 

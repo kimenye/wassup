@@ -63,6 +63,7 @@ class WhatsappListenerClient:
 		self.methodsInterface = connectionManager.getMethodsInterface()
 		
 		self.signalsInterface.registerListener("message_received", self.onMessageReceived)
+		self.signalsInterface.registerListener("group_messageReceived", self.onGroupMessageReceived)
 		self.signalsInterface.registerListener("image_received", self.onImageReceived)
 		self.signalsInterface.registerListener("auth_success", self.onAuthSuccess)
 		self.signalsInterface.registerListener("auth_fail", self.onAuthFailed)
@@ -123,10 +124,10 @@ class WhatsappListenerClient:
 
 	def sendMessage(self, target, text):
 		self.app.logger.info("To send %s " %text)
-		jid = "%s@s.whatsapp.net" %target
+		jid = target
 		self.app.logger.info("Message %s" %jid)
-		self.done = True
-		self.app.logger.info("Self %s" %self.done)
+		# self.done = True
+		# self.app.logger.info("Self %s" %self.done)
 		self.methodsInterface.call("message_send", (jid, text))
 
 
@@ -163,7 +164,6 @@ class WhatsappListenerClient:
 		
 	def onDisconnected(self, reason):
 		self.app.logger.info('Disconnected')
-		# self.login(self.username, self.password)
 		self.done = True
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
@@ -183,6 +183,12 @@ class WhatsappListenerClient:
 		
 		if response['profile_pic'] == '/profile_pics/original/missing.png':
 			self.methodsInterface.call("contact_getProfilePicture", (jid,))	
+
+	def onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
+		self.app.logger.info('Received a message on the group %s' %content)
+
+		if wantsReceipt and self.sendReceipts:
+			self.methodsInterface.call("message_ack", (jid, messageId))
 
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
 		self.app.logger.info('Message Received %s' %messageContent)
@@ -250,12 +256,24 @@ def job():
 
 	return jsonify(status='ok')
 
+@app.route('/broadcast', methods=['POST', 'GET'])
+def broadcast():
+	msg = request.json['message']
+	jid = request.json['jid']
+
+	message = Message(jid, msg, False)
+	db.session.add(message)
+	db.session.commit()
+	return jsonify(status='ok')
+
 @app.route('/send', methods=['POST', 'GET'])
 def send():
 	phone_number = request.json['phone_number']
 	msg = request.json['message']
 	app.logger.info('TO: %s' %phone_number)
 	app.logger.info('MSG: %s' %msg)
+
+	phone_number = "%s@s.whatsapp.net" %phone_number
 	
 	message = Message(phone_number, msg, False)
 	db.session.add(message)
