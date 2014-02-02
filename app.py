@@ -186,15 +186,25 @@ class WhatsappListenerClient:
 
 	def onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
 		self.app.logger.info('Received a message on the group %s' %content)
+		self.app.logger.info('JID %s - %s - %s' %(jid, pushName, author))
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
+
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json' }
+		data = { "message" : { "text" : content, "group_jid" : jid, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName, "jid" : author }}
+
+		url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		post_url = url + "/receive_broadcast"
+		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+
+		self.checkProfilePic(author)
 
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
 		self.app.logger.info('Message Received %s' %messageContent)
 		phone_number = jid.split("@")[0]
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
-		data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName }}
+		data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName  }}
 		url = os.getenv('SERVER_URL', 'http://localhost:3000')
 		post_url = url + "/messages"
 		r = requests.post(post_url, data=json.dumps(data), headers=headers)
