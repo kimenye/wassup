@@ -77,6 +77,8 @@ class WhatsappListenerClient:
 		self.signalsInterface.registerListener("group_addParticipantsSuccess", self.onGroupAddParticipantsSuccess)
 		
 		self.cm = connectionManager
+		self.url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		self.post_headers = {'Content-type': 'application/json', 'Accept': 'application/json'}		
 		self.done = False
 
 	def login(self, username, password):
@@ -158,12 +160,20 @@ class WhatsappListenerClient:
 	def onAuthSuccess(self, username):
 		self.app.logger.info('Authenticated')
 		self.methodsInterface.call("ready")
+		self.setStatus(1)
+
+	def setStatus(self, status):
+		self.app.logger.info("Setting status %s" %status)
+		post_url = self.url + "/status"
+		data = { "status" : status }
+		r = requests.post(post_url, data=json.dumps(data), headers=self.post_headers)
 
 	def onAuthFailed(self, username, err):
 		self.app.logger.info('Authentication failed')
 		
 	def onDisconnected(self, reason):
 		self.app.logger.info('Disconnected')
+		self.setStatus(0)
 		self.done = True
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
