@@ -121,6 +121,9 @@ class WhatsappListenerClient:
 				params = job.args.encode('utf8').split(",")
 				self.methodsInterface.call(job.method.encode('utf8'), (params[0], [params[1] + "@s.whatsapp.net"],))
 				job.sent = True
+			elif job.method == "contact_getProfilePicture":
+				self.methodsInterface.call("contact_getProfilePicture", (job.args.encode('utf8'),))
+				job.sent = True
 		
 		self.app.db.session.commit()				
 
@@ -135,6 +138,8 @@ class WhatsappListenerClient:
 
 	def onGroupAddParticipantsSuccess(self, groupJid, jid):
 		self.app.logger.info("Added participant %s" %jid)
+		# check the profile pic
+		self.checkProfilePic(jid)
 
 	def onGroupCreateSuccess(self, groupJid):
 		self.app.logger.info("Created with id %s" %groupJid)
@@ -191,7 +196,7 @@ class WhatsappListenerClient:
 		r = requests.get(get_url, headers=headers)
 		response = r.json()
 		
-		if response['profile_pic'] == '/profile_pics/original/missing.png':
+		if response['profile_url'] == '/images/profile_pics/thumb/missing.png':		
 			self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 
 	def onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
