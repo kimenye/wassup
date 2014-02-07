@@ -20,7 +20,10 @@ file_handler = StreamHandler()
 app.logger.setLevel(logging.DEBUG)  # set the desired logging level here
 app.logger.addHandler(file_handler)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db/dev.db'
+
+db_url = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///db/dev.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+
 db = SQLAlchemy(app)
 app.db = db
 
