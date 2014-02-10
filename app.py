@@ -199,7 +199,7 @@ class WhatsappListenerClient:
 		r = requests.get(get_url, headers=headers)
 		response = r.json()
 		
-		if response['profile_url'] == '/images/profile_pics/thumb/missing.png':		
+		if response['profile_url'] == '/assets/missing.png':		
 			self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 
 	def onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
