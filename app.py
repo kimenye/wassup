@@ -7,6 +7,7 @@ from Yowsup.Common.utilities import Utilities
 from rq import Queue
 from messenger import conn
 from logging import StreamHandler
+from logging.handlers import RotatingFileHandler
 
 import requests
 import os, json, base64, time
@@ -20,6 +21,8 @@ file_handler = StreamHandler()
 app.logger.setLevel(logging.DEBUG)  # set the desired logging level here
 app.logger.addHandler(file_handler)
 
+handler = RotatingFileHandler('logs/production.log', maxBytes=10000, backupCount=1)
+app.logger.addHandler(handler)
 
 db_url = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///db/dev.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url

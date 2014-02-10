@@ -4,6 +4,7 @@ env
 include
 venv/lib
 venv
+logs
 
 # Python Packages
 *.egg
