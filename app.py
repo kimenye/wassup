@@ -168,12 +168,12 @@ class WhatsappListenerClient:
 	def onAuthSuccess(self, username):
 		self.app.logger.info('Authenticated')
 		self.methodsInterface.call("ready")
-		self.setStatus(1)
+		self.setStatus(1, "Authenticated")
 
-	def setStatus(self, status):
+	def setStatus(self, status, message="Status message"):
 		self.app.logger.info("Setting status %s" %status)
 		post_url = self.url + "/status"
-		data = { "status" : status }
+		data = { "status" : status, "message" : message }
 		r = requests.post(post_url, data=json.dumps(data), headers=self.post_headers)
 
 	def onAuthFailed(self, username, err):
@@ -181,7 +181,7 @@ class WhatsappListenerClient:
 		
 	def onDisconnected(self, reason):
 		self.app.logger.info('Disconnected')
-		self.setStatus(0)
+		self.setStatus(0, "Got disconnected")
 		self.done = True
 
 	def onGotProfilePicture(self, jid, imageId, filePath):

@@ -3,6 +3,7 @@ env
 .Python
 include
 venv/lib
+venv
 
 # Python Packages
 *.egg
