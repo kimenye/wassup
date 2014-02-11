@@ -259,7 +259,7 @@ class Server:
 		r = requests.post(url, files=files)
 
 # server = Server('sqlite:///db/dev.db',True, True)
-server = Server('mysql+mysqldb://wassup:yowsup@localhost/yowsup',True, True)
+server = Server('mysql+mysqldb://rails:wxFKW6Fz4B@localhost/rails',True, True)
 login = "254733171036"
 password = "+rYGoEyk7y9QBGLCSHuPS2VVZNw="
 password = base64.b64decode(bytes(password.encode('utf-8')))
