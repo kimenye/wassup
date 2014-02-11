@@ -41,6 +41,8 @@ class WhatsappListenerClient:
 		print("Authed %s" % username)
 		self.methodsInterface.call("ready")
 
+		self.methodsInterface.call("message_send", ("61450212500@s.whatsapp.net", "Woosah"))	
+
 	def onAuthFailed(self, username, err):
 		print("Auth Failed!")
 
