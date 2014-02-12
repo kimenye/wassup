@@ -27,7 +27,7 @@ class Job(Base):
 	__tablename__ = 'job_logs'
 	id = Column(Integer, primary_key=True)
 
-	objectId = Column(Integer)
+	# objectId = Column(Integer)
 	method = Column(String(255))
 	targets = Column(String(255))
 	args = Column(String(255))
@@ -70,7 +70,8 @@ class Server:
 		self.signalsInterface.registerListener("group_addParticipantsSuccess", self.onGroupAddParticipantsSuccess)
 		
 		self.cm = connectionManager
-		self.url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		# self.url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		self.url = 'http://localhost:8080'
 		self.post_headers = {'Content-type': 'application/json', 'Accept': 'application/json'}		
 		self.done = False
 
@@ -155,8 +156,8 @@ class Server:
 	def onGroupGotInfo(self,jid,owner,subject,subjectOwner,subjectTimestamp,creationTimestamp):
 		print("Group info %s - %s" %(jid, subject))
 
-		url = os.getenv('SERVER_URL', 'http://localhost:3000')
-		put_url = url + "/update_group"
+		
+		put_url = self.url + "/update_group"
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		data = { "name" : subject, "jid" : jid }
 
@@ -190,15 +191,15 @@ class Server:
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		print('Got profile picture')
-		url = os.getenv('SERVER_URL', 'http://localhost:3000')
-		url = url + "/contacts/" + jid.split("@")[0] + "/upload"
+		# url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload"
 		files = {'file': open(filePath, 'rb')}
 		r = requests.post(url, files=files)
 
 	def checkProfilePic(self, jid):
 		phone_number = jid.split("@")[0]
-		url = os.getenv('SERVER_URL', 'http://localhost:3000')
-		get_url = url + "/profile?phone_number=" + phone_number
+		# url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		get_url = self.url + "/profile?phone_number=" + phone_number
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		r = requests.get(get_url, headers=headers)
 		response = r.json()
@@ -216,8 +217,8 @@ class Server:
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json' }
 		data = { "message" : { "text" : content, "group_jid" : jid, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName, "jid" : author }}
 
-		url = os.getenv('SERVER_URL', 'http://localhost:3000')
-		post_url = url + "/receive_broadcast"
+		# url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		post_url = self.url + "/receive_broadcast"
 		r = requests.post(post_url, data=json.dumps(data), headers=headers)
 
 		self.checkProfilePic(author)
@@ -227,8 +228,8 @@ class Server:
 		phone_number = jid.split("@")[0]
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName  }}
-		url = os.getenv('SERVER_URL', 'http://localhost:3000')
-		post_url = url + "/messages"
+		# url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		post_url = self.url + "/messages"
 		r = requests.post(post_url, data=json.dumps(data), headers=headers)
 
 		if wantsReceipt and self.sendReceipts:
@@ -240,8 +241,8 @@ class Server:
 		print('Image Received')	
 		phone_number = jid.split("@")[0]
 
-		post_url = os.getenv('SERVER_URL', 'http://localhost:3000')
-		post_url = post_url + "/upload"
+		# post_url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		post_url = self.url + "/upload"
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		data = { "message" : { 'url' : url, 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
 		r = requests.post(post_url, data=json.dumps(data), headers=headers)
@@ -253,8 +254,8 @@ class Server:
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		print('Profile picture received')
-		url = os.getenv('SERVER_URL', 'http://localhost:3000')
-		url = url + "/contacts/" + jid.split("@")[0] + "/upload"
+		# url = os.getenv('SERVER_URL', 'http://localhost:3000')
+		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload"
 		files = {'file': open(filePath, 'rb')}
 		r = requests.post(url, files=files)
 
