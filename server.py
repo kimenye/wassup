@@ -187,7 +187,8 @@ class Server:
 	def onDisconnected(self, reason):
 		print('Disconnected')
 		self.setStatus(0, "Got disconnected")
-		self.done = True
+		# self.done = True
+		self.login(self.username, self.password)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		print('Got profile picture')
