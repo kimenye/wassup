@@ -48,7 +48,7 @@ class Server:
 	def __init__(self, url, keepAlive = False, sendReceipts = False):
 		self.sendReceipts = sendReceipts
 		self.keepAlive = keepAlive
-		self.db = create_engine(url, echo=True)
+		self.db = create_engine(url, echo=False)
 		# self.metadata = BoundMetaData(self.db)
 
 		self.Session = sessionmaker(bind=self.db)
@@ -117,7 +117,8 @@ class Server:
 			# self.sendMessage("61450212500@s.whatsapp.net", "Woosah")
 			# self.app.db.session.commit()
 
-			time.sleep(5)
+			# time.sleep(5)
+			raw_input()	
 	
 	def seekJobs(self):
 		# jobs = Job.query.filter_by(sent=False).all()
@@ -191,9 +192,10 @@ class Server:
 		print('Authentication failed')
 		
 	def onDisconnected(self, reason):
-		print('Disconnected')
+		logging.info('Disconnected')
 		self.setStatus(0, "Got disconnected")
 		# self.done = True
+		logging.info('About to log in again with %s and %s' %(self.username, self.password))
 		self.login(self.username, self.password)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
