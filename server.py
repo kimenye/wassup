@@ -27,7 +27,7 @@ class Job(Base):
 	__tablename__ = 'job_logs'
 	id = Column(Integer, primary_key=True)
 
-	# objectId = Column(Integer)
+	#objectId = Column(Integer)
 	method = Column(String(255))
 	targets = Column(String(255))
 	args = Column(String(255))
