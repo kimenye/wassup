@@ -6,8 +6,13 @@ from Yowsup.connectionmanager import YowsupConnectionManager
 from Yowsup.Common.utilities import Utilities
 import os
 import os, json, base64, time, requests
+import logging
+
+
 
 Base = declarative_base()
+logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
+
 
 class Message(Base):
 	__tablename__ = 'job_messages'
@@ -172,6 +177,7 @@ class Server:
 
 	def onAuthSuccess(self, username):
 		# self.app.logger.info('Authenticated')
+		logging.info("We are authenticated")
 		self.methodsInterface.call("ready")
 		self.setStatus(1, "Authenticated")
 
