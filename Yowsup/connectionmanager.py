@@ -709,7 +709,7 @@ class ReaderThread(threading.Thread):
 		#self.socket = connection
 		self.terminateRequested = False
 		self.disconnectedSent = False
-		self.timeout = 500
+		self.timeout = 1000
 		self.selectTimeout = 3
 		self.requests = {};
 		self.lock = threading.Lock()
