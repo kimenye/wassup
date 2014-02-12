@@ -147,7 +147,7 @@ class Server:
 	def onGroupAddParticipantsSuccess(self, groupJid, jid):
 		print("Added participant %s" %jid)
 		# check the profile pic
-		self.checkProfilePic(jid)
+		self.checkProfilePic(jid[0])
 
 	def onGroupCreateSuccess(self, groupJid):
 		print("Created with id %s" %groupJid)
