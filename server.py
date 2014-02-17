@@ -10,7 +10,7 @@ import os, json, base64, time, requests
 
 
 Base = declarative_base()
-# logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
+logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
 
 
 class Message(Base):
@@ -85,17 +85,17 @@ class Server:
 
 		# messages = self.Session.query(Message).filter_by(sent=True).all()			
 		# for instance in self.s.query(Message): 
-			# print instance.message
+			# logging.info instance.message
 
 		# for job in self.s.query(Job):
-			# print job.method
+			# logging.info job.method
 
 
 		
 
 
 	def login(self, username, password):
-		print('In Login')
+		logging.info('In Login')
 		self.username = username
 		self.password = password
 
@@ -106,10 +106,10 @@ class Server:
 		# self.methodsInterface.call("profile_setStatus", ("Sprout is using WhatsApp",))
 
 		while not self.done:
-			print('Waiting')		
+			logging.info('Waiting')		
 			messages = self.s.query(Message).filter_by(sent=False).all()			
 			if len(messages) > 0:
-				print("Messages %s" % len(messages))
+				logging.info("Messages %s" % len(messages))
 			
 			for message in messages:
 				self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
@@ -127,7 +127,7 @@ class Server:
 		# jobs = Job.query.filter_by(sent=False).all()
 		jobs = self.s.query(Job).filter_by(sent=False).all()
 		if len(jobs) > 0:
-			print("Jobs %s" % len(jobs))
+			logging.info("Jobs %s" % len(jobs))
 
 		for job in jobs:
 			if job.method == "profile_setStatus":
@@ -148,22 +148,22 @@ class Server:
 		self.s.commit()			
 
 	def sendMessage(self, target, text):
-		print("Message %s " %text)
+		logging.info("Message %s " %text)
 		jid = target
-		print("To %s" %jid)
+		logging.info("To %s" %jid)
 		self.methodsInterface.call("message_send", (jid, text))	
 
 	def onGroupAddParticipantsSuccess(self, groupJid, jid):
-		print("Added participant %s" %jid)
+		logging.info("Added participant %s" %jid)
 		# check the profile pic
 		self.checkProfilePic(jid[0])
 
 	def onGroupCreateSuccess(self, groupJid):
-		print("Created with id %s" %groupJid)
+		logging.info("Created with id %s" %groupJid)
 		self.methodsInterface.call("group_getInfo", (groupJid,))
 
 	def onGroupGotInfo(self,jid,owner,subject,subjectOwner,subjectTimestamp,creationTimestamp):
-		print("Group info %s - %s" %(jid, subject))
+		logging.info("Group info %s - %s" %(jid, subject))
 
 		
 		put_url = self.url + "/update_group"
@@ -171,17 +171,17 @@ class Server:
 		data = { "name" : subject, "jid" : jid }
 
 		r = requests.post(put_url, data=json.dumps(data), headers=headers)
-		print("Updated the group")
+		logging.info("Updated the group")
 
 	def onGroupCreateFail(self, errorCode):
-		print("Error creating a group %s" %errorCode)
+		logging.info("Error creating a group %s" %errorCode)
 
 	def onSetStatusSuccess(self,jid,messageId):
-		print("Set the profile message for %s - %s" %(jid, messageId))
+		logging.info("Set the profile message for %s - %s" %(jid, messageId))
 
 	def onAuthSuccess(self, username):
 		# self.app.logger.info('Authenticated')
-		print("We are authenticated")
+		logging.info("We are authenticated")
 		self.methodsInterface.call("ready")
 		self.setStatus(1, "Authenticated")
 
@@ -192,17 +192,17 @@ class Server:
 		r = requests.post(post_url, data=json.dumps(data), headers=self.post_headers)
 
 	def onAuthFailed(self, username, err):
-		print('Authentication failed')
+		logging.info('Authentication failed')
 		
 	def onDisconnected(self, reason):
-		print('Disconnected')
+		logging.info('Disconnected')
 		self.setStatus(0, "Got disconnected")
 		# self.done = True
-		print('About to log in again with %s and %s' %(self.username, self.password))
+		logging.info('About to log in again with %s and %s' %(self.username, self.password))
 		self.login(self.username, self.password)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
-		print('Got profile picture')
+		logging.info('Got profile picture')
 		# url = os.getenv('SERVER_URL', 'http://localhost:3000')
 		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload"
 		files = {'file': open(filePath, 'rb')}
@@ -220,8 +220,8 @@ class Server:
 			self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 
 	def onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
-		print('Received a message on the group %s' %content)
-		print('JID %s - %s - %s' %(jid, pushName, author))
+		logging.info('Received a message on the group %s' %content)
+		logging.info('JID %s - %s - %s' %(jid, pushName, author))
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
@@ -236,7 +236,7 @@ class Server:
 		self.checkProfilePic(author)
 
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
-		print('Message Received %s' %messageContent)
+		logging.info('Message Received %s' %messageContent)
 		phone_number = jid.split("@")[0]
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName  }}
@@ -250,7 +250,7 @@ class Server:
 		self.checkProfilePic(jid)	
 
 	def onImageReceived(self, messageId, jid, preview, url, size, wantsReceipt, isBroadCast):	
-		print('Image Received')	
+		logging.info('Image Received')	
 		phone_number = jid.split("@")[0]
 
 		# post_url = os.getenv('SERVER_URL', 'http://localhost:3000')
@@ -265,7 +265,7 @@ class Server:
 		self.checkProfilePic(jid)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
-		print('Profile picture received')
+		logging.info('Profile picture received')
 		# url = os.getenv('SERVER_URL', 'http://localhost:3000')
 		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload"
 		files = {'file': open(filePath, 'rb')}
