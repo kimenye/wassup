@@ -4,14 +4,13 @@ from sqlalchemy import Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker
 from Yowsup.connectionmanager import YowsupConnectionManager
 from Yowsup.Common.utilities import Utilities
-import os
 import os, json, base64, time, requests
-import logging
+# import logging
 
 
 
 Base = declarative_base()
-logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
+# logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
 
 
 class Message(Base):
@@ -182,7 +181,7 @@ class Server:
 
 	def onAuthSuccess(self, username):
 		# self.app.logger.info('Authenticated')
-		logging.info("We are authenticated")
+		print("We are authenticated")
 		self.methodsInterface.call("ready")
 		self.setStatus(1, "Authenticated")
 
@@ -196,10 +195,10 @@ class Server:
 		print('Authentication failed')
 		
 	def onDisconnected(self, reason):
-		logging.info('Disconnected')
+		print('Disconnected')
 		self.setStatus(0, "Got disconnected")
 		# self.done = True
-		logging.info('About to log in again with %s and %s' %(self.username, self.password))
+		print('About to log in again with %s and %s' %(self.username, self.password))
 		self.login(self.username, self.password)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
