@@ -76,7 +76,11 @@ class Server:
 		
 		self.cm = connectionManager
 		# self.url = os.getenv('SERVER_URL', 'http://localhost:3000')
-		self.url = 'http://localhost:8080'
+		# self.url = 'http://localhost:8080'
+		
+		# self.url = 'http://localhost:3000'
+		self.url = os.environ['URL']
+
 		self.post_headers = {'Content-type': 'application/json', 'Accept': 'application/json'}		
 		self.done = False
 
@@ -99,8 +103,8 @@ class Server:
 		self.methodsInterface.call("auth_login", (username, self.password))
 		self.methodsInterface.call("presence_sendAvailable", ())
 
-		self.methodsInterface.call("profile_setPicture", (r"logo.jpg",))
-		self.methodsInterface.call("profile_setStatus", ("Sprout is using WhatsApp",))
+		# self.methodsInterface.call("profile_setPicture", (r"logo.jpg",))
+		# self.methodsInterface.call("profile_setStatus", ("Sprout is using WhatsApp",))
 
 		while not self.done:
 			print('Waiting')		
@@ -213,7 +217,7 @@ class Server:
 		r = requests.get(get_url, headers=headers)
 		response = r.json()
 		
-		if response['profile_url'] == '/assets/missing.png':		
+		if response['profile_url'] == '/missing.png':		
 			self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 
 	def onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
@@ -269,7 +273,9 @@ class Server:
 		r = requests.post(url, files=files)
 
 # server = Server('sqlite:///db/dev.db',True, True)
-server = Server('mysql+mysqldb://rails:wxFKW6Fz4B@localhost/rails',True, True)
+# server = Server('mysql+mysqldb://rails:wxFKW6Fz4B@localhost/rails',True, True)
+database_url = os.environ['SQLALCHEMY_DATABASE_URI']
+server = Server(database_url,True, True)
 login = "254733171036"
 password = "+rYGoEyk7y9QBGLCSHuPS2VVZNw="
 password = base64.b64decode(bytes(password.encode('utf-8')))
