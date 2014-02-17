@@ -11,7 +11,7 @@ import logging
 
 
 Base = declarative_base()
-logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
+logging.basicConfig(filename='/home/wassup/logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
 
 
 class Message(Base):
@@ -92,21 +92,21 @@ class Server:
 
 
 	def login(self, username, password):
-		print('In Login')
+	        logging.info('In Login')
 		self.username = username
 		self.password = password
 
 		self.methodsInterface.call("auth_login", (username, self.password))
 		self.methodsInterface.call("presence_sendAvailable", ())
 
-		self.methodsInterface.call("profile_setPicture", (r"logo.jpg",))
+		#self.methodsInterface.call("profile_setPicture", (r"logo.jpg",))
 		self.methodsInterface.call("profile_setStatus", ("Sprout is using WhatsApp",))
 
 		while not self.done:
-			print('Waiting')		
+			#logging.info('Waiting')		
 			messages = self.s.query(Message).filter_by(sent=False).all()			
 			if len(messages) > 0:
-				print("Messages %s" % len(messages))
+				logging.info("Messages %s" % len(messages))
 			
 			for message in messages:
 				self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
@@ -117,14 +117,14 @@ class Server:
 			# self.sendMessage("61450212500@s.whatsapp.net", "Woosah")
 			# self.app.db.session.commit()
 
-			# time.sleep(5)
-			raw_input()	
+			time.sleep(10)
+			#raw_input()	
 	
 	def seekJobs(self):
 		# jobs = Job.query.filter_by(sent=False).all()
 		jobs = self.s.query(Job).filter_by(sent=False).all()
 		if len(jobs) > 0:
-			print("Jobs %s" % len(jobs))
+			logging.info("Jobs %s" % len(jobs))
 
 		for job in jobs:
 			if job.method == "profile_setStatus":
@@ -145,22 +145,22 @@ class Server:
 		self.s.commit()			
 
 	def sendMessage(self, target, text):
-		print("Message %s " %text)
+		logging.info("Message %s " %text)
 		jid = target
-		print("To %s" %jid)
+		logging.info("To %s" %jid)
 		self.methodsInterface.call("message_send", (jid, text))	
 
 	def onGroupAddParticipantsSuccess(self, groupJid, jid):
-		print("Added participant %s" %jid)
+		logging.info("Added participant %s" %jid)
 		# check the profile pic
 		self.checkProfilePic(jid[0])
 
 	def onGroupCreateSuccess(self, groupJid):
-		print("Created with id %s" %groupJid)
+		logging.info("Created with id %s" %groupJid)
 		self.methodsInterface.call("group_getInfo", (groupJid,))
 
 	def onGroupGotInfo(self,jid,owner,subject,subjectOwner,subjectTimestamp,creationTimestamp):
-		print("Group info %s - %s" %(jid, subject))
+		logging.info("Group info %s - %s" %(jid, subject))
 
 		
 		put_url = self.url + "/update_group"
@@ -196,6 +196,7 @@ class Server:
 		self.setStatus(0, "Got disconnected")
 		# self.done = True
 		logging.info('About to log in again with %s and %s' %(self.username, self.password))
+		time.sleep(10)
 		self.login(self.username, self.password)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
