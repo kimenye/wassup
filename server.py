@@ -120,8 +120,8 @@ class Server:
 			# self.sendMessage("61450212500@s.whatsapp.net", "Woosah")
 			# self.app.db.session.commit()
 
-			# time.sleep(5)
-			raw_input()	
+			time.sleep(10)
+			# raw_input()	
 	
 	def seekJobs(self):
 		# jobs = Job.query.filter_by(sent=False).all()
