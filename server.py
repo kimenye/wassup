@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from Yowsup.connectionmanager import YowsupConnectionManager
 from Yowsup.Common.utilities import Utilities
 import os, json, base64, time, requests
-# import logging
+import logging
 
 
 
