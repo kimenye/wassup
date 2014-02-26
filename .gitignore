@@ -28,6 +28,8 @@ pip-log.txt
 .coverage
 .tox
 .env
+local_exec.sh
+
 
 # Mac OS X
 .DS_Store
