@@ -191,6 +191,8 @@ class Server:
 		# sha1.update(fp.read())
 		# hsh = base64.b64encode(sha1.digest())
 		# self.methodsInterface.call("media_requestUpload", (hsh, mtype, os.path.getsize(local_path)))
+
+		# self.methodsInterface.call("contact_getProfilePicture", ("254733171036@s.whatsapp.net",))	
         
 
 	def setStatus(self, status, message="Status message"):
