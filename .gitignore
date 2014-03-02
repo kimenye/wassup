@@ -5,6 +5,7 @@ include
 venv/lib
 venv
 logs
+tmp
 
 # Python Packages
 *.egg

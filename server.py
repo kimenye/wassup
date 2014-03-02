@@ -1,11 +1,11 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import sessionmaker
 from Yowsup.connectionmanager import YowsupConnectionManager
 from Yowsup.Common.utilities import Utilities
 from Yowsup.Media.uploader import MediaUploader
-import os, json, base64, time, requests, hashlib
+import os, json, base64, time, requests, hashlib, datetime
 import logging
 
 
@@ -26,6 +26,19 @@ class Message(Base):
 		self.message = message
 		self.sent = sent
 
+class Asset(Base):
+	__tablename__ = 'assets'
+	id = Column(Integer, primary_key=True)
+	asset_hash = Column(String(255))
+	file_file_name = Column(String(255))
+	mms_url = Column(String(255))
+	asset_type = Column(String(255))
+	file_file_size = Column(Integer)
+
+	def __init__(self, asset_hash, mms_url):
+		self.asset_hash = asset_hash
+		self.mms_url = mms_url
+
 class Job(Base):
 	__tablename__ = 'job_logs'
 	id = Column(Integer, primary_key=True)
@@ -34,12 +47,14 @@ class Job(Base):
 	targets = Column(String(255))
 	args = Column(String(255))
 	sent = Column(Boolean())
+	scheduled_time = Column(DateTime())
 
-	def __init__(self, method, targets, sent, args):
+	def __init__(self, method, targets, sent, args, scheduled_time):
 		self.method = method
 		self.targets = targets
 		self.sent = sent
 		self.args = args
+		self.scheduled_time = scheduled_time
 
 class Server:
 	def __init__(self, url, keepAlive = False, sendReceipts = False):
@@ -59,6 +74,8 @@ class Server:
 		self.signalsInterface.registerListener("message_received", self.onMessageReceived)
 		self.signalsInterface.registerListener("group_messageReceived", self.onGroupMessageReceived)
 		self.signalsInterface.registerListener("image_received", self.onImageReceived)
+		self.signalsInterface.registerListener("video_received", self.onVideoReceived)
+		
 		self.signalsInterface.registerListener("auth_success", self.onAuthSuccess)
 		self.signalsInterface.registerListener("auth_fail", self.onAuthFailed)
 		self.signalsInterface.registerListener("disconnected", self.onDisconnected)
@@ -70,8 +87,9 @@ class Server:
 		self.signalsInterface.registerListener("group_gotInfo", self.onGroupGotInfo)
 		self.signalsInterface.registerListener("group_addParticipantsSuccess", self.onGroupAddParticipantsSuccess)
 
-		self.signalsInterface.registerListener("media_uploadRequestSuccess", self.onUploadSuccess)
-		self.signalsInterface.registerListener("media_uploadRequestFailed", self.onUploadFailed)
+		self.signalsInterface.registerListener("media_uploadRequestSuccess", self.onUploadRequestSuccess)
+		# self.signalsInterface.registerListener("media_uploadRequestFailed", self.onUploadRequestFailed)
+		self.signalsInterface.registerListener("media_uploadRequestDuplicate", self.onUploadRequestDuplicate)
 		
 		self.cm = connectionManager
 		self.url = os.environ['URL']
@@ -80,11 +98,8 @@ class Server:
 		self.done = False
 
 	def onUploadFailed(self, hash):
-		logging.info("Upload failed")
-
-	def onUploadSuccess(self, hash, url, removeFrom):
-		logging.info("The url is %s " %url)
-
+		print "Upload failed"
+	
 
 	def login(self, username, password):
 		logging.info('In Login')
@@ -126,8 +141,128 @@ class Server:
 			elif job.method == "contact_getProfilePicture":
 				self.methodsInterface.call("contact_getProfilePicture", (job.args.encode('utf8'),))
 				job.sent = True
+			elif job.method == "broadcast_Text":
+				now = datetime.datetime.now()
+				print "Job time %s" %job.scheduled_time
+				if now > job.scheduled_time:
+					jids = job.targets.split(",")
+					for jid in jids:
+						self.sendMessage(jid + "@s.whatsapp.net", job.args)
+						time.sleep(0.3)
+					job.sent = True
+			elif job.method == "broadcast_Image":
+				now = datetime.datetime.now()
+				if now > job.scheduled_time:
+					jids = job.targets.split(",")
+					for jid in jids:
+						self.sendImage(jid + "@s.whatsapp.net", job.args)
+			elif job.method == "uploadMedia":
+				args = job.args.encode('utf8').split(",")
+				asset_id = args[0]
+				url = args[1]
+				print "Asset Id: %s" %args[0]
+				asset = self.s.query(Asset).get(asset_id)				
+				print "File name: %s" %asset.file_file_name
+				print "Url: %s" %asset.mms_url
+
+				if asset.mms_url == None:
+					self.requestMediaUrl(url, asset)
+				job.sent = True
+			elif job.method == "sendImage":
+				args = job.args.encode('utf8').split(",")
+				asset_id = args[0]
+				asset = self.s.query(Asset).get(asset_id)
+				jids = job.targets.split(",")
+				for jid in jids:
+					self.sendImage(jid + "@s.whatsapp.net", asset)
+				job.sent = True
+
+				
 		
-		self.s.commit()			
+		self.s.commit()		
+
+	def onUploadRequestDuplicate(self,_hash, url):
+		print "Upload duplicate"
+		print "The url is %s" %url
+		print "The hash is %s" %_hash	
+
+	def onUploadRequestSuccess(self, _hash, url, removeFrom):
+		# logging.info("The url is %s " %url)
+		# MU = MediaUploader(receiver_jid,sender_jid, self.onUploadSuccess, self.onError, self.onProgressUpdated)
+		# MU.upload(self.local_path, url)
+		print "Upload Request success"
+		print "The url is %s" %url
+		print "The hash is %s" %_hash
+		asset = self.s.query(Asset).filter_by(asset_hash=_hash).first()
+		asset.mms_url = url
+		self.s.commit()
+
+		# path = "tmp/" + asset.file_file_name + "_%s" %asset.id 
+		path = "tmp/_%s"%asset.id + asset.file_file_name
+
+		print "To upload %s" %path
+		print "To %s" %self.username
+
+		MU = MediaUploader(self.username + "@s.whatsapp.net", self.username + "@s.whatsapp.net", self.onUploadSucccess, self.onUploadError, self.onUploadProgress)
+		MU.upload(path, url, asset.id)
+
+	def onUploadSucccess(self, url, _id):
+		print "Upload success!"
+		print "Url %s" %url
+		if _id is not None:
+			asset = self.s.query(Asset).get(_id)
+			asset.mms_url = url
+			self.s.commit()
+		
+
+	def onUploadError(self):
+		print "Error with upload"
+
+	# def onUploadRequestFailed()
+
+	def onUploadProgress(self, progress):
+		print "Upload Progress"
+
+	def requestMediaUrl(self, url, asset):
+		print "Requesting Url: %s" %url	
+		mtype = asset.asset_type.lower()
+		sha1 = hashlib.sha256()
+
+		# millis = int(datetime.datetime.now().strftime("%s")) * 1000
+		# 1393762505000
+		path = "_%s"%asset.id + asset.file_file_name
+		file_name = "tmp/%s" %path
+		fp = open(file_name,'wb')
+		fp.write(requests.get(url).content)
+		fp.close()
+
+		fp = open(file_name, 'rb')
+		try:
+			sha1.update(fp.read())
+			hsh = base64.b64encode(sha1.digest())
+
+			asset.asset_hash = hsh
+			self.s.commit()
+
+			self.methodsInterface.call("media_requestUpload", (hsh, mtype, os.path.getsize(file_name)))
+		finally:
+			fp.close()  
+
+	def getImageFile(self, asset):
+		path = "_%s"%asset.id + asset.file_file_name
+		file_name = "tmp/%s" %path
+		return file_name
+
+	def sendImage(self, target, asset):
+		# logging.info('Sending image to %s' %target)
+		f = open(self.getImageFile(asset), 'r')
+		stream = base64.b64encode(f.read())
+		f.close()
+    	# receiver_jid = "4915777908983@s.whatsapp.net"
+
+		# self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"save_a_mum", str(asset.file_file_size), asset.asset_hash))
+		self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Raspberry Pi Cam", str(os.path.getsize(self.getImageFile(asset))), stream))
+
 
 	def sendMessage(self, target, text):
 		logging.info("Message %s " %text)
@@ -172,27 +307,18 @@ class Server:
 		logging.info("The pic is %s" %logo_url)
 		logging.info("Status MSG %s" %status)
 
-		self.methodsInterface.call("profile_setPicture", (logo_url,))
-		self.methodsInterface.call("profile_setStatus", (status,))
+		# self.methodsInterface.call("profile_setPicture", (logo_url,))
+		# self.methodsInterface.call("profile_setStatus", (status,))
 
-		# url = "https://mms879.whatsapp.net/d/ZxYtUVSq4hoysA0Lyh0_dL-eziQABPNAt55gSg/Amu8_dr4eyj3NrbygVuKPXPz-r_REAMkT13mGFxgufEC.jpg"
-		# url = "http://s3-ap-southeast-1.amazonaws.com/yowsup/assets/files/000/000/020/original/satisfy_customer_early.jpg"
-		# thumb = "https://mms879.whatsapp.net/d/ZxYtUVSq4hoysA0Lyh0_dL-eziQABPNAt55gSg/Amu8_dr4eyj3NrbygVuKPXPz-r_REAMkT13mGFxgufEC.jpg"
-		# base633 = "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"
-		# self.methodsInterface.call("message_imageSend", ("61450212500@s.whatsapp.net", url, "File", "230", base633 ))
-
-		# self.methodsInterface.call("media_requestUpload", (base633, "image", "39761"))
-
-		# local_path = "logo.jpg"
 		# mtype = "image"
 		# sha1 = hashlib.sha256()
 		# fp = open("logo.jpg", 'rb')
-
-		# sha1.update(fp.read())
-		# hsh = base64.b64encode(sha1.digest())
-		# self.methodsInterface.call("media_requestUpload", (hsh, mtype, os.path.getsize(local_path)))
-
-		# self.methodsInterface.call("contact_getProfilePicture", ("254733171036@s.whatsapp.net",))	
+		# try:
+		# 	sha1.update(fp.read())
+		# 	hsh = base64.b64encode(sha1.digest())
+		# 	self.methodsInterface.call("media_requestUpload", (hsh, mtype, os.path.getsize('logo.jpg')))
+		# finally:
+		# 	fp.close()  
         
 
 	def setStatus(self, status, message="Status message"):
@@ -262,13 +388,30 @@ class Server:
 		# print preview
 		post_url = self.url + "/upload"
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
-		data = { "message" : { 'url' : url, 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
+		data = { "message" : { 'url' : url, 'message_type' : 'Image' , 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
 		r = requests.post(post_url, data=json.dumps(data), headers=headers)
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
 		self.checkProfilePic(jid)
+
+	# self.signalInterface.send("video_received", (msgId, fromAttribute, mediaPreview, mediaUrl, mediaSize, wantsReceipt, isBroadcast))
+	def onVideoReceived(self, messageId, jid, mediaPreview, mediaUrl, mediaSize, wantsReceipt, isBroadcast):
+		print "Video Received %s" %messageId
+		print "From %s" %jid
+		print "url: %s" %mediaUrl
+
+		post_url = self.url + "/upload"
+		phone_number = jid.split("@")[0]
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		data = { "message" : { 'url' : mediaUrl, 'message_type' : 'Video', 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
+
+		# Send a receipt regardless of whether it was a successful upload
+		if wantsReceipt and self.sendReceipts:
+			self.methodsInterface.call("message_ack", (jid, messageId))
+		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		logging.info('Profile picture received')

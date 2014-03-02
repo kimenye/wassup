@@ -2,6 +2,7 @@ from ..Common.Http.warequest import WARequest
 from ..Common.Http.waresponseparser import JSONResponseParser
 import socket, ssl, mimetypes, os, hashlib, sys
 from time import sleep
+import traceback
 
 class MediaUploader(WARequest):
     def __init__(self, jid, accountJid, successClbk = None, errorClbk = None, progressCallback = None):
@@ -22,7 +23,7 @@ class MediaUploader(WARequest):
         
         self.sock = socket.socket();
         
-    def upload(self, sourcePath, uploadUrl):
+    def upload(self, sourcePath, uploadUrl, id=None):
         
         _host = uploadUrl.replace("https://","")
 
@@ -127,11 +128,12 @@ class MediaUploader(WARequest):
             
             if result["url"] is not None:
                 if self.successCallback:
-                    self.successCallback(result["url"])
+                    self.successCallback(result["url"], id)
             else:
                 self.errorCallback()
 
         except:
+            traceback.print_exc()
             print("Error occured at transfer %s"%sys.exc_info()[1])
             if self.errorCallback:
                 self.errorCallback();
