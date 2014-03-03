@@ -31,6 +31,8 @@ class Asset(Base):
 	id = Column(Integer, primary_key=True)
 	asset_hash = Column(String(255))
 	file_file_name = Column(String(255))
+	video_file_name = Column(String(255))
+	video_file_size = Column(String(255))
 	mms_url = Column(String(255))
 	asset_type = Column(String(255))
 	file_file_size = Column(Integer)
@@ -169,6 +171,7 @@ class Server:
 				print "Asset Id: %s" %args[0]
 				asset = self.s.query(Asset).get(asset_id)				
 				print "File name: %s" %asset.file_file_name
+				print "Vido name: %s" %asset.video_file_name
 				print "Url: %s" %asset.mms_url
 
 				if asset.mms_url == None:
@@ -182,10 +185,26 @@ class Server:
 				for jid in jids:
 					self.sendImage(jid + "@s.whatsapp.net", asset)
 				job.sent = True
+			elif job.method == "broadcast_Video":
+				now = datetime.datetime.now()
+				args = job.args.encode('utf8').split(",")
+				asset_id = args[0]
+				asset = self.s.query(Asset).get(asset_id)
+				if now > job.scheduled_time:
+					jids = job.targets.split(",")
+					for jid in jids:
+						self.sendVideo(jid + "@s.whatsapp.net", asset)
+						time.sleep(1)
+				job.sent = True
 			elif job.method == "broadcast_Group_Image":
 				asset = self._getAsset(job.args)
 				self.sendImage(job.targets, asset)
 				job.sent = True
+			elif job.method == "broadcast_Group_Video":
+				asset = self.get_Asset(job.args)
+				self.sendVideo(job.targets, asset)
+				job.sent = True
+
 				
 		
 		self.s.commit()		
@@ -247,10 +266,8 @@ class Server:
 		mtype = asset.asset_type.lower()
 		sha1 = hashlib.sha256()
 
-		# millis = int(datetime.datetime.now().strftime("%s")) * 1000
-		# 1393762505000
-		path = "_%s"%asset.id + asset.file_file_name
-		file_name = "tmp/%s" %path
+		
+		file_name = self.getImageFile(asset)
 		fp = open(file_name,'wb')
 		fp.write(requests.get(url).content)
 		fp.close()
@@ -274,24 +291,37 @@ class Server:
 			fp.close()  
 
 	def getImageFile(self, asset):
-		path = "_%s"%asset.id + asset.file_file_name
-		file_name = "tmp/%s" %path
-		return file_name
+		if asset.asset_type == "Image":
+			path = "_%s"%asset.id + asset.file_file_name
+			file_name = "tmp/%s" %path
+			return file_name
+		else:
+			path = "_%s"%asset.id + asset.video_file_name
+			file_name = "tmp/%s" %path
+			return file_name
 
 	def getImageThumbnailFile(self, asset):
-		path = "_%s"%asset.id + "_thumb_" + asset.file_file_name
-		file_name = "tmp/%s" %path
-		return file_name		
+		if asset.asset_type == "Image":
+			path = "_%s"%asset.id + "_thumb_" + asset.file_file_name
+			file_name = "tmp/%s" %path
+			return file_name		
+		else:
+			path = "_%s"%asset.id + "_thumb_" + asset.video_file_name
+			file_name = "tmp/%s" %path
+			return file_name	
 
-	def sendImage(self, target, asset):
-		# logging.info('Sending image to %s' %target)
+	def sendVideo(self, target, asset):
 		f = open(self.getImageThumbnailFile(asset), 'r')
 		stream = base64.b64encode(f.read())
 		f.close()
-    	# receiver_jid = "4915777908983@s.whatsapp.net"
+		self.methodsInterface.call("message_videoSend",(target,asset.mms_url,"Video", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
 
-		# self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"save_a_mum", str(asset.file_file_size), asset.asset_hash))
-		self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Raspberry Pi Cam", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
+
+	def sendImage(self, target, asset):
+		f = open(self.getImageThumbnailFile(asset), 'r')
+		stream = base64.b64encode(f.read())
+		f.close()    	
+		self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Image", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
 
 
 	def sendMessage(self, target, text):
