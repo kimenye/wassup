@@ -182,10 +182,18 @@ class Server:
 				for jid in jids:
 					self.sendImage(jid + "@s.whatsapp.net", asset)
 				job.sent = True
-
+			elif job.method == "broadcast_Group_Image":
+				asset = self._getAsset(job.args)
+				self.sendImage(job.targets, asset)
+				job.sent = True
 				
 		
 		self.s.commit()		
+
+	def _getAsset(self, args):
+		args = args.encode('utf8').split(",")
+		asset_id = args[0]
+		return self.s.query(Asset).get(asset_id)
 
 	def onUploadRequestDuplicate(self,_hash, url):
 		print "Upload duplicate"
