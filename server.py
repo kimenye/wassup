@@ -152,21 +152,27 @@ class Server:
 					job.sent = True
 			elif job.method == "broadcast_Image":
 				now = datetime.datetime.now()
+				args = job.args.encode('utf8').split(",")
+				asset_id = args[0]
+				asset = self.s.query(Asset).get(asset_id)
 				if now > job.scheduled_time:
 					jids = job.targets.split(",")
 					for jid in jids:
-						self.sendImage(jid + "@s.whatsapp.net", job.args)
+						self.sendImage(jid + "@s.whatsapp.net", asset)
+						time.sleep(1)
+				job.sent = True
 			elif job.method == "uploadMedia":
 				args = job.args.encode('utf8').split(",")
 				asset_id = args[0]
 				url = args[1]
+				preview = args[2]
 				print "Asset Id: %s" %args[0]
 				asset = self.s.query(Asset).get(asset_id)				
 				print "File name: %s" %asset.file_file_name
 				print "Url: %s" %asset.mms_url
 
 				if asset.mms_url == None:
-					self.requestMediaUrl(url, asset)
+					self.requestMediaUrl(url, asset, preview)
 				job.sent = True
 			elif job.method == "sendImage":
 				args = job.args.encode('utf8').split(",")
@@ -185,6 +191,11 @@ class Server:
 		print "Upload duplicate"
 		print "The url is %s" %url
 		print "The hash is %s" %_hash	
+
+		asset = self.s.query(Asset).filter_by(asset_hash=_hash).first()
+		# ujJisLjOd0/IoWwftJJEtKKzaDh3BrbtwJ+CwKgOR7M=
+		asset.mms_url = url
+		self.s.commit()
 
 	def onUploadRequestSuccess(self, _hash, url, removeFrom):
 		# logging.info("The url is %s " %url)
@@ -223,7 +234,7 @@ class Server:
 	def onUploadProgress(self, progress):
 		print "Upload Progress"
 
-	def requestMediaUrl(self, url, asset):
+	def requestMediaUrl(self, url, asset, preview):
 		print "Requesting Url: %s" %url	
 		mtype = asset.asset_type.lower()
 		sha1 = hashlib.sha256()
@@ -235,6 +246,12 @@ class Server:
 		fp = open(file_name,'wb')
 		fp.write(requests.get(url).content)
 		fp.close()
+
+		tb_path = self.getImageThumbnailFile(asset)
+		tb = open(tb_path, 'wb')
+		tb.write(requests.get(preview).content)
+		tb.close()
+
 
 		fp = open(file_name, 'rb')
 		try:
@@ -253,15 +270,20 @@ class Server:
 		file_name = "tmp/%s" %path
 		return file_name
 
+	def getImageThumbnailFile(self, asset):
+		path = "_%s"%asset.id + "_thumb_" + asset.file_file_name
+		file_name = "tmp/%s" %path
+		return file_name		
+
 	def sendImage(self, target, asset):
 		# logging.info('Sending image to %s' %target)
-		f = open(self.getImageFile(asset), 'r')
+		f = open(self.getImageThumbnailFile(asset), 'r')
 		stream = base64.b64encode(f.read())
 		f.close()
     	# receiver_jid = "4915777908983@s.whatsapp.net"
 
 		# self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"save_a_mum", str(asset.file_file_size), asset.asset_hash))
-		self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Raspberry Pi Cam", str(os.path.getsize(self.getImageFile(asset))), stream))
+		self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Raspberry Pi Cam", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
 
 
 	def sendMessage(self, target, text):
