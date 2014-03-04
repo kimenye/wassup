@@ -118,6 +118,8 @@ class Server:
 				logging.info("Messages %s" % len(messages))
 			
 			for message in messages:
+				print "Phone Number : %s" %message.phone_number
+				print "Message : %s" %message.message
 				self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
 				message.sent = True
 
