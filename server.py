@@ -145,7 +145,7 @@ class Server:
 				job.sent = True
 			elif job.method == "broadcast_Text":
 				now = datetime.datetime.now()
-				print "Job time %s" %job.scheduled_time
+				logging.info("Job time %s" %job.scheduled_time)
 				if now > job.scheduled_time:
 					jids = job.targets.split(",")
 					for jid in jids:
@@ -168,11 +168,11 @@ class Server:
 				asset_id = args[0]
 				url = args[1]
 				preview = args[2]
-				print "Asset Id: %s" %args[0]
+				logging.info("Asset Id: %s" %args[0])
 				asset = self.s.query(Asset).get(asset_id)				
-				print "File name: %s" %asset.file_file_name
-				print "Vido name: %s" %asset.video_file_name
-				print "Url: %s" %asset.mms_url
+				logging.info("File name: %s" %asset.file_file_name)
+				logging.info("Video name: %s" %asset.video_file_name)
+				logging.info("Url: %s" %asset.mms_url)
 
 				if asset.mms_url == None:
 					self.requestMediaUrl(url, asset, preview)
@@ -215,9 +215,9 @@ class Server:
 		return self.s.query(Asset).get(asset_id)
 
 	def onUploadRequestDuplicate(self,_hash, url):
-		print "Upload duplicate"
-		print "The url is %s" %url
-		print "The hash is %s" %_hash	
+		logging.info("Upload duplicate")
+		logging.info("The url is %s" %url)
+		logging.info("The hash is %s" %_hash)	
 
 		asset = self.s.query(Asset).filter_by(asset_hash=_hash).first()
 		# ujJisLjOd0/IoWwftJJEtKKzaDh3BrbtwJ+CwKgOR7M=
@@ -225,12 +225,9 @@ class Server:
 		self.s.commit()
 
 	def onUploadRequestSuccess(self, _hash, url, removeFrom):
-		# logging.info("The url is %s " %url)
-		# MU = MediaUploader(receiver_jid,sender_jid, self.onUploadSuccess, self.onError, self.onProgressUpdated)
-		# MU.upload(self.local_path, url)
-		print "Upload Request success"
-		print "The url is %s" %url
-		print "The hash is %s" %_hash
+		logging.info("Upload Request success")
+		logging.info("The url is %s" %url)
+		logging.info("The hash is %s" %_hash)
 		asset = self.s.query(Asset).filter_by(asset_hash=_hash).first()
 		asset.mms_url = url
 		self.s.commit()
@@ -238,15 +235,15 @@ class Server:
 		# path = "tmp/" + asset.file_file_name + "_%s" %asset.id 
 		path = "tmp/_%s"%asset.id + asset.file_file_name
 
-		print "To upload %s" %path
-		print "To %s" %self.username
+		logging.info("To upload %s" %path)
+		logging.info("To %s" %self.username)
 
 		MU = MediaUploader(self.username + "@s.whatsapp.net", self.username + "@s.whatsapp.net", self.onUploadSucccess, self.onUploadError, self.onUploadProgress)
 		MU.upload(path, url, asset.id)
 
 	def onUploadSucccess(self, url, _id):
-		print "Upload success!"
-		print "Url %s" %url
+		logging.info("Upload success!")
+		logging.info("Url %s" %url)
 		if _id is not None:
 			asset = self.s.query(Asset).get(_id)
 			asset.mms_url = url
@@ -254,15 +251,15 @@ class Server:
 		
 
 	def onUploadError(self):
-		print "Error with upload"
+		logging.info("Error with upload")
 
 	# def onUploadRequestFailed()
 
 	def onUploadProgress(self, progress):
-		print "Upload Progress"
+		logging.info("Upload Progress")
 
 	def requestMediaUrl(self, url, asset, preview):
-		print "Requesting Url: %s" %url	
+		logging.info("Requesting Url: %s" %url)	
 		mtype = asset.asset_type.lower()
 		sha1 = hashlib.sha256()
 
