@@ -180,9 +180,7 @@ class Server:
 					self.requestMediaUrl(url, asset, preview)
 				job.sent = True
 			elif job.method == "sendImage":
-				args = job.args.encode('utf8').split(",")
-				asset_id = args[0]
-				asset = self.s.query(Asset).get(asset_id)
+				asset = self._getAsset(job.args)
 				jids = job.targets.split(",")
 				for jid in jids:
 					self.sendImage(jid + "@s.whatsapp.net", asset)
@@ -190,8 +188,7 @@ class Server:
 			elif job.method == "broadcast_Video":
 				now = datetime.datetime.now()
 				args = job.args.encode('utf8').split(",")
-				asset_id = args[0]
-				asset = self.s.query(Asset).get(asset_id)
+				asset = self._getAsset(job.args)
 				if now > job.scheduled_time:
 					jids = job.targets.split(",")
 					for jid in jids:
@@ -203,7 +200,7 @@ class Server:
 				self.sendImage(job.targets, asset)
 				job.sent = True
 			elif job.method == "broadcast_Group_Video":
-				asset = self.get_Asset(job.args)
+				asset = self._getAsset(job.args)
 				self.sendVideo(job.targets, asset)
 				job.sent = True
 
@@ -222,7 +219,6 @@ class Server:
 		logging.info("The hash is %s" %_hash)	
 
 		asset = self.s.query(Asset).filter_by(asset_hash=_hash).first()
-		# ujJisLjOd0/IoWwftJJEtKKzaDh3BrbtwJ+CwKgOR7M=
 		asset.mms_url = url
 		self.s.commit()
 
@@ -235,7 +231,8 @@ class Server:
 		self.s.commit()
 
 		# path = "tmp/" + asset.file_file_name + "_%s" %asset.id 
-		path = "tmp/_%s"%asset.id + asset.file_file_name
+		# path = "tmp/_%s"%asset.id + asset.file_file_name
+		path = self.getImageFile(asset)
 
 		logging.info("To upload %s" %path)
 		logging.info("To %s" %self.username)
@@ -265,11 +262,17 @@ class Server:
 		mtype = asset.asset_type.lower()
 		sha1 = hashlib.sha256()
 
+		if not url.startswith("http"):
+			url = os.environ['URL'] + url
+
+		if not preview.startswith("http"):
+			preview = os.environ['URL'] + preview
 		
 		file_name = self.getImageFile(asset)
 		fp = open(file_name,'wb')
 		fp.write(requests.get(url).content)
 		fp.close()
+
 
 		tb_path = self.getImageThumbnailFile(asset)
 		tb = open(tb_path, 'wb')
@@ -368,16 +371,6 @@ class Server:
 
 		self.methodsInterface.call("profile_setPicture", (logo_url,))
 		self.methodsInterface.call("profile_setStatus", (status,))
-
-		# mtype = "image"
-		# sha1 = hashlib.sha256()
-		# fp = open("logo.jpg", 'rb')
-		# try:
-		# 	sha1.update(fp.read())
-		# 	hsh = base64.b64encode(sha1.digest())
-		# 	self.methodsInterface.call("media_requestUpload", (hsh, mtype, os.path.getsize('logo.jpg')))
-		# finally:
-		# 	fp.close()  
         
 
 	def setStatus(self, status, message="Status message"):
@@ -455,11 +448,10 @@ class Server:
 
 		self.checkProfilePic(jid)
 
-	# self.signalInterface.send("video_received", (msgId, fromAttribute, mediaPreview, mediaUrl, mediaSize, wantsReceipt, isBroadcast))
 	def onVideoReceived(self, messageId, jid, mediaPreview, mediaUrl, mediaSize, wantsReceipt, isBroadcast):
-		print "Video Received %s" %messageId
-		print "From %s" %jid
-		print "url: %s" %mediaUrl
+		logging.info("Video Received %s" %messageId)
+		logging.info("From %s" %jid)
+		logging.info("url: %s" %mediaUrl)
 
 		post_url = self.url + "/upload"
 		phone_number = jid.split("@")[0]
