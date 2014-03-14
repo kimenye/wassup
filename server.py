@@ -8,6 +8,8 @@ from Yowsup.Media.uploader import MediaUploader
 import os, json, base64, time, requests, hashlib, datetime
 import logging
 
+import calendar
+from datetime import datetime, timedelta
 
 
 Base = declarative_base()
@@ -20,6 +22,7 @@ class Message(Base):
 	phone_number = Column(String(255))
 	message = Column(String(255))
 	sent = Column(Boolean())
+	scheduled_time = Column(DateTime())
 
 	def __init__(self, phone_number, message, sent):
 		self.phone_number = phone_number
@@ -118,10 +121,20 @@ class Server:
 				logging.info("Messages %s" % len(messages))
 			
 			for message in messages:
-				print "Phone Number : %s" %message.phone_number
-				print "Message : %s" %message.message
-				self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
-				message.sent = True
+				logging.info("Phone Number : %s" %message.phone_number)
+				logging.info("Message : %s" %message.message)
+
+				now = datetime.now()
+				if message.scheduled_time == None:
+					self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
+					message.sent = True
+				else:
+					if now > self.utc_to_local(message.scheduled_time):
+						# print "Scheduled: %s " %self.utc_to_local(message.scheduled_time)
+						# print "Now %s " %now
+
+						self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
+						message.sent = True
 
 			self.seekJobs()
 			time.sleep(10)
@@ -146,20 +159,20 @@ class Server:
 				self.methodsInterface.call("contact_getProfilePicture", (job.args.encode('utf8'),))
 				job.sent = True
 			elif job.method == "broadcast_Text":
-				now = datetime.datetime.now()
+				now = datetime.now()
 				logging.info("Job time %s" %job.scheduled_time)
-				if now > job.scheduled_time:
+				if now > self.utc_to_local(job.scheduled_time):
 					jids = job.targets.split(",")
 					for jid in jids:
 						self.sendMessage(jid + "@s.whatsapp.net", job.args)
 						time.sleep(0.3)
 					job.sent = True
 			elif job.method == "broadcast_Image":
-				now = datetime.datetime.now()
+				now = datetime.now()
 				args = job.args.encode('utf8').split(",")
 				asset_id = args[0]
 				asset = self.s.query(Asset).get(asset_id)
-				if now > job.scheduled_time:
+				if now > self.utc_to_local(job.scheduled_time):
 					jids = job.targets.split(",")
 					for jid in jids:
 						self.sendImage(jid + "@s.whatsapp.net", asset)
@@ -186,10 +199,10 @@ class Server:
 					self.sendImage(jid + "@s.whatsapp.net", asset)
 				job.sent = True
 			elif job.method == "broadcast_Video":
-				now = datetime.datetime.now()
+				now = datetime.now()
 				args = job.args.encode('utf8').split(",")
 				asset = self._getAsset(job.args)
-				if now > job.scheduled_time:
+				if now > self.utc_to_local(job.scheduled_time):
 					jids = job.targets.split(",")
 					for jid in jids:
 						self.sendVideo(jid + "@s.whatsapp.net", asset)
@@ -219,8 +232,22 @@ class Server:
 		logging.info("The hash is %s" %_hash)	
 
 		asset = self.s.query(Asset).filter_by(asset_hash=_hash).first()
+		print "Asset id %s" %asset.mms_url
 		asset.mms_url = url
 		self.s.commit()
+
+		put_url = self.url + "/assets/%s" %asset.id
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		data = { "asset" : { "mms_url": url } }
+
+		r = requests.patch(put_url, data=json.dumps(data), headers=headers)		
+
+	def utc_to_local(self,utc_dt):
+		# get integer timestamp to avoid precision lost
+		timestamp = calendar.timegm(utc_dt.timetuple())
+		local_dt = datetime.fromtimestamp(timestamp)
+		assert utc_dt.resolution >= timedelta(microseconds=1)
+		return local_dt.replace(microsecond=utc_dt.microsecond)
 
 	def onUploadRequestSuccess(self, _hash, url, removeFrom):
 		logging.info("Upload Request success")
@@ -369,7 +396,7 @@ class Server:
 		logging.info("The pic is %s" %logo_url)
 		logging.info("Status MSG %s" %status)
 
-		self.methodsInterface.call("profile_setPicture", (logo_url,))
+		# self.methodsInterface.call("profile_setPicture", (logo_url,))
 		self.methodsInterface.call("profile_setStatus", (status,))
         
 
@@ -396,14 +423,16 @@ class Server:
 		r = requests.post(url, files=files)
 
 	def checkProfilePic(self, jid):
-		phone_number = jid.split("@")[0]
-		get_url = self.url + "/profile?phone_number=" + phone_number
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
-		r = requests.get(get_url, headers=headers)
-		response = r.json()
-		
-		if response['profile_url'] == '/missing.png':		
-			self.methodsInterface.call("contact_getProfilePicture", (jid,))	
+		pull_pic = os.environ['PULL_STATUS_PIC']
+		if pull_pic == "true":
+			phone_number = jid.split("@")[0]
+			get_url = self.url + "/profile?phone_number=" + phone_number
+			headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+			r = requests.get(get_url, headers=headers)
+			response = r.json()
+			
+			if response['profile_url'] == '/missing.png':		
+				self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 
 	def onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
 		logging.info('Received a message on the group %s' %content)
