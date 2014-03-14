@@ -396,7 +396,7 @@ class Server:
 		logging.info("The pic is %s" %logo_url)
 		logging.info("Status MSG %s" %status)
 
-		# self.methodsInterface.call("profile_setPicture", (logo_url,))
+		self.methodsInterface.call("profile_setPicture", (logo_url,))
 		self.methodsInterface.call("profile_setStatus", (status,))
         
 
