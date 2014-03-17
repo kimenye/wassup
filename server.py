@@ -124,18 +124,21 @@ class Server:
 				logging.info("Phone Number : %s" %message.phone_number)
 				logging.info("Message : %s" %message.message)
 
-				now = datetime.now()
-				if message.scheduled_time == None:
+				if self._onSchedule(message.scheduled_time):
 					self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
 					message.sent = True
-				else:
-					if now > self.utc_to_local(message.scheduled_time):
-						# print "Scheduled: %s " %self.utc_to_local(message.scheduled_time)
-						# print "Now %s " %now
+				# now = datetime.now()
+				# if message.scheduled_time == None:
+				# 	self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
+				# 	message.sent = True
+				# else:
+				# 	if now > self.utc_to_local(message.scheduled_time):
+				# 		# print "Scheduled: %s " %self.utc_to_local(message.scheduled_time)
+				# 		# print "Now %s " %now
 
-						self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
-						message.sent = True
-
+				# 		self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
+				# 		message.sent = True
+			self.s.commit()	
 			self.seekJobs()
 			time.sleep(10)
 	
@@ -145,81 +148,84 @@ class Server:
 			logging.info("Jobs %s" % len(jobs))
 
 		for job in jobs:
-			if job.method == "profile_setStatus":
-				self.methodsInterface.call(job.method.encode('utf8'), (job.args.encode('utf8'),))
-				job.sent = True
-			elif job.method == "group_create":
-				self.methodsInterface.call(job.method.encode('utf8'), (job.args.encode('utf8'),))
-				job.sent = True
-			elif job.method == "group_addParticipants":
-				params = job.args.encode('utf8').split(",")
-				self.methodsInterface.call(job.method.encode('utf8'), (params[0], [params[1] + "@s.whatsapp.net"],))
-				job.sent = True
-			elif job.method == "contact_getProfilePicture":
-				self.methodsInterface.call("contact_getProfilePicture", (job.args.encode('utf8'),))
-				job.sent = True
-			elif job.method == "broadcast_Text":
-				now = datetime.now()
-				logging.info("Job time %s" %job.scheduled_time)
-				if now > self.utc_to_local(job.scheduled_time):
-					jids = job.targets.split(",")
-					for jid in jids:
-						self.sendMessage(jid + "@s.whatsapp.net", job.args)
-						time.sleep(0.3)
+			if self._onSchedule(job.scheduled_time):
+				if job.method == "profile_setStatus":
+					self.methodsInterface.call(job.method.encode('utf8'), (job.args.encode('utf8'),))
 					job.sent = True
-			elif job.method == "broadcast_Image":
-				now = datetime.now()
-				args = job.args.encode('utf8').split(",")
-				asset_id = args[0]
-				asset = self.s.query(Asset).get(asset_id)
-				if now > self.utc_to_local(job.scheduled_time):
+				elif job.method == "group_create":
+					self.methodsInterface.call(job.method.encode('utf8'), (job.args.encode('utf8'),))
+					job.sent = True
+				elif job.method == "group_addParticipants":
+					params = job.args.encode('utf8').split(",")
+					self.methodsInterface.call(job.method.encode('utf8'), (params[0], [params[1] + "@s.whatsapp.net"],))
+					job.sent = True
+				elif job.method == "contact_getProfilePicture":
+					self.methodsInterface.call("contact_getProfilePicture", (job.args.encode('utf8'),))
+					job.sent = True
+				elif job.method == "broadcast_Text":
+					jids = job.targets.split(",")
+					targets = []
+					for jid in jids:
+						targets.append("%s@s.whatsapp.net" %jid)
+					self.methodsInterface.call("message_broadcast", (targets, job.args, ))
+
+					job.sent = True
+				elif job.method == "broadcast_Image":
+				# 	now = datetime.now()
+					args = job.args.encode('utf8').split(",")
+					asset_id = args[0]
+					asset = self.s.query(Asset).get(asset_id)
 					jids = job.targets.split(",")
 					for jid in jids:
 						self.sendImage(jid + "@s.whatsapp.net", asset)
 						time.sleep(1)
-				job.sent = True
-			elif job.method == "uploadMedia":
-				args = job.args.encode('utf8').split(",")
-				asset_id = args[0]
-				url = args[1]
-				preview = args[2]
-				logging.info("Asset Id: %s" %args[0])
-				asset = self.s.query(Asset).get(asset_id)				
-				logging.info("File name: %s" %asset.file_file_name)
-				logging.info("Video name: %s" %asset.video_file_name)
-				logging.info("Url: %s" %asset.mms_url)
+					job.sent = True
+				elif job.method == "uploadMedia":
+					args = job.args.encode('utf8').split(",")
+					asset_id = args[0]
+					url = args[1]
+					preview = args[2]
+					logging.info("Asset Id: %s" %args[0])
+					asset = self.s.query(Asset).get(asset_id)				
+					logging.info("File name: %s" %asset.file_file_name)
+					logging.info("Video name: %s" %asset.video_file_name)
+					logging.info("Url: %s" %asset.mms_url)
 
-				if asset.mms_url == None:
-					self.requestMediaUrl(url, asset, preview)
-				job.sent = True
-			elif job.method == "sendImage":
-				asset = self._getAsset(job.args)
-				jids = job.targets.split(",")
-				for jid in jids:
-					self.sendImage(jid + "@s.whatsapp.net", asset)
-				job.sent = True
-			elif job.method == "broadcast_Video":
-				now = datetime.now()
-				args = job.args.encode('utf8').split(",")
-				asset = self._getAsset(job.args)
-				if now > self.utc_to_local(job.scheduled_time):
+					if asset.mms_url == None:
+						self.requestMediaUrl(url, asset, preview)
+					job.sent = True
+				elif job.method == "sendImage":
+					asset = self._getAsset(job.args)
+					jids = job.targets.split(",")
+					for jid in jids:
+						self.sendImage(jid + "@s.whatsapp.net", asset)
+					job.sent = True
+				elif job.method == "broadcast_Video":
+				# 	now = datetime.now()
+					args = job.args.encode('utf8').split(",")
+					asset = self._getAsset(job.args)
+				# 	if now > self.utc_to_local(job.scheduled_time):
 					jids = job.targets.split(",")
 					for jid in jids:
 						self.sendVideo(jid + "@s.whatsapp.net", asset)
 						time.sleep(1)
-				job.sent = True
-			elif job.method == "broadcast_Group_Image":
-				asset = self._getAsset(job.args)
-				self.sendImage(job.targets, asset)
-				job.sent = True
-			elif job.method == "broadcast_Group_Video":
-				asset = self._getAsset(job.args)
-				self.sendVideo(job.targets, asset)
-				job.sent = True
+					job.sent = True
+				elif job.method == "broadcast_Group_Image":
+					asset = self._getAsset(job.args)
+					self.sendImage(job.targets, asset)
+					job.sent = True
+				elif job.method == "broadcast_Group_Video":
+					asset = self._getAsset(job.args)
+					self.sendVideo(job.targets, asset)
+					job.sent = True
+
 
 				
 		
-		self.s.commit()		
+		self.s.commit()	
+
+	def _onSchedule(self,scheduled_time):
+		return (scheduled_time is None or datetime.now() > self.utc_to_local(scheduled_time))
 
 	def _getAsset(self, args):
 		args = args.encode('utf8').split(",")
@@ -396,7 +402,7 @@ class Server:
 		logging.info("The pic is %s" %logo_url)
 		logging.info("Status MSG %s" %status)
 
-		self.methodsInterface.call("profile_setPicture", (logo_url,))
+		# self.methodsInterface.call("profile_setPicture", (logo_url,))
 		self.methodsInterface.call("profile_setStatus", (status,))
         
 
