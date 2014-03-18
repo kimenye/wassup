@@ -127,17 +127,7 @@ class Server:
 				if self._onSchedule(message.scheduled_time):
 					self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
 					message.sent = True
-				# now = datetime.now()
-				# if message.scheduled_time == None:
-				# 	self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
-				# 	message.sent = True
-				# else:
-				# 	if now > self.utc_to_local(message.scheduled_time):
-				# 		# print "Scheduled: %s " %self.utc_to_local(message.scheduled_time)
-				# 		# print "Now %s " %now
 
-				# 		self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
-				# 		message.sent = True
 			self.s.commit()	
 			self.seekJobs()
 			time.sleep(10)
@@ -171,7 +161,6 @@ class Server:
 
 					job.sent = True
 				elif job.method == "broadcast_Image":
-				# 	now = datetime.now()
 					args = job.args.encode('utf8').split(",")
 					asset_id = args[0]
 					asset = self.s.query(Asset).get(asset_id)
@@ -201,10 +190,8 @@ class Server:
 						self.sendImage(jid + "@s.whatsapp.net", asset)
 					job.sent = True
 				elif job.method == "broadcast_Video":
-				# 	now = datetime.now()
 					args = job.args.encode('utf8').split(",")
 					asset = self._getAsset(job.args)
-				# 	if now > self.utc_to_local(job.scheduled_time):
 					jids = job.targets.split(",")
 					for jid in jids:
 						self.sendVideo(jid + "@s.whatsapp.net", asset)
@@ -218,6 +205,11 @@ class Server:
 					asset = self._getAsset(job.args)
 					self.sendVideo(job.targets, asset)
 					job.sent = True
+				elif job.method == "typing_send":
+					self.methodsInterface.call("typing_send", ("%s@s.whatsapp.net" %job.targets,))
+					job.sent = True
+					time.sleep(5)
+					self.methodsInterface.call("typing_paused", ("%s@s.whatsapp.net" %job.targets,))
 
 
 				
