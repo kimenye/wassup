@@ -10,7 +10,7 @@ import logging
 
 import calendar
 from datetime import datetime, timedelta
-
+from pubnub import Pubnub
 
 Base = declarative_base()
 logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
@@ -69,6 +69,8 @@ class Server:
 
 		self.Session = sessionmaker(bind=self.db)
 		self.s = self.Session()
+
+		self.pubnub = Pubnub(os.environ['PUB_KEY'], os.environ['SUB_KEY'], None, False)
 
 		connectionManager = YowsupConnectionManager()
 		connectionManager.setAutoPong(keepAlive)		
@@ -458,6 +460,15 @@ class Server:
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
+		self.pubnub.publish({
+			'channel' : os.environ['PUB_CHANNEL'],
+			'message' : {
+				'phone_number' : phone_number,
+				'text' : messageContent,
+				'name' : pushName
+			}
+		})
+		
 		self.checkProfilePic(jid)	
 
 	def onImageReceived(self, messageId, jid, preview, url, size, wantsReceipt, isBroadCast):	
