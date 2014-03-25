@@ -470,8 +470,9 @@ class Server:
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
+		channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
 		self.pubnub.publish({
-			'channel' : os.environ['PUB_CHANNEL'] + "_%s" %self.username,
+			'channel' : channel,
 			'message' : {
 				'type' : 'text',
 				'phone_number' : phone_number,
