@@ -82,6 +82,8 @@ class Server:
 		self.signalsInterface.registerListener("group_messageReceived", self.onGroupMessageReceived)
 		self.signalsInterface.registerListener("image_received", self.onImageReceived)
 		self.signalsInterface.registerListener("video_received", self.onVideoReceived)
+		self.signalsInterface.registerListener("audio_received", self.onAudioReceived)
+		
 		
 		self.signalsInterface.registerListener("auth_success", self.onAuthSuccess)
 		self.signalsInterface.registerListener("auth_fail", self.onAuthFailed)
@@ -97,6 +99,7 @@ class Server:
 		self.signalsInterface.registerListener("media_uploadRequestSuccess", self.onUploadRequestSuccess)
 		# self.signalsInterface.registerListener("media_uploadRequestFailed", self.onUploadRequestFailed)
 		self.signalsInterface.registerListener("media_uploadRequestDuplicate", self.onUploadRequestDuplicate)
+		self.signalsInterface.registerListener("presence_available", self.onPresenceAvailable)
 		
 		self.cm = connectionManager
 		self.url = os.environ['URL']
@@ -117,7 +120,7 @@ class Server:
 		self.methodsInterface.call("presence_sendAvailable", ())
 
 		while not self.done:
-			logging.info('Waiting')		
+			# logging.info('Waiting')		
 			messages = self.s.query(Message).filter_by(sent=False).all()			
 			if len(messages) > 0:
 				logging.info("Messages %s" % len(messages))
@@ -225,6 +228,13 @@ class Server:
 		args = args.encode('utf8').split(",")
 		asset_id = args[0]
 		return self.s.query(Asset).get(asset_id)
+
+	def onPresenceAvailable(self, jid):
+		logging.info("JID available %s" %jid)
+
+	def onPresenceUnavailable(self, jid):
+		logging.info("JID unavilable %s" %jid)
+
 
 	def onUploadRequestDuplicate(self,_hash, url):
 		logging.info("Upload duplicate")
@@ -461,8 +471,9 @@ class Server:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
 		self.pubnub.publish({
-			'channel' : os.environ['PUB_CHANNEL'],
+			'channel' : os.environ['PUB_CHANNEL'] + "_%s" %self.username,
 			'message' : {
+				'type' : 'text',
 				'phone_number' : phone_number,
 				'text' : messageContent,
 				'name' : pushName
@@ -485,6 +496,21 @@ class Server:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
 		self.checkProfilePic(jid)
+
+
+	def onAudioReceived(self, messageId, jid, url, size, wantsReceipt, isBroadcast):
+		logging.info("Audio received %s" %messageId)
+		logging.info("url: %s" %url)
+		phone_number = jid.split("@")[0]
+
+		post_url = self.url + "/upload"
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json' }
+		data = { "message" : { 'url' : url,  'message_type': 'Audio', 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
+
+		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+		
+		if wantsReceipt and self.sendReceipts:
+			self.methodsInterface.call("message_ack", (jid, messageId))
 
 	def onVideoReceived(self, messageId, jid, mediaPreview, mediaUrl, mediaSize, wantsReceipt, isBroadcast):
 		logging.info("Video Received %s" %messageId)
