@@ -441,7 +441,7 @@ class Server:
 			r = requests.get(get_url, headers=headers)
 			response = r.json()
 			
-			if response['profile_url'] == '/missing.png':		
+			if response['profile_url'] == '/missing.jpg':		
 				self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 
 	def onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
@@ -495,6 +495,17 @@ class Server:
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
+
+		channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
+		self.pubnub.publish({
+			'channel' : channel,
+			'message' : {
+				'type' : 'image',
+				'phone_number' : phone_number,
+				'url' : url,
+				'name' : ''
+			}
+		})
 
 		self.checkProfilePic(jid)
 
