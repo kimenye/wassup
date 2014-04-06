@@ -135,7 +135,7 @@ class Server:
 
 			self.s.commit()	
 			self.seekJobs()
-			time.sleep(10)
+			time.sleep(1)
 	
 	def seekJobs(self):
 		jobs = self.s.query(Job).filter_by(sent=False).all()
@@ -213,7 +213,7 @@ class Server:
 				elif job.method == "typing_send":
 					self.methodsInterface.call("typing_send", ("%s@s.whatsapp.net" %job.targets,))
 					job.sent = True
-					time.sleep(5)
+					time.sleep(3)
 					self.methodsInterface.call("typing_paused", ("%s@s.whatsapp.net" %job.targets,))
 
 
