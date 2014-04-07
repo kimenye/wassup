@@ -95,6 +95,10 @@ class Server:
 		self.signalsInterface.registerListener("group_createFail", self.onGroupCreateFail)
 		self.signalsInterface.registerListener("group_gotInfo", self.onGroupGotInfo)
 		self.signalsInterface.registerListener("group_addParticipantsSuccess", self.onGroupAddParticipantsSuccess)
+		self.signalsInterface.registerListener("group_subjectReceived", self.onGroupSubjectReceived)
+		self.signalsInterface.registerListener("notification_removedFromGroup", self.onNotificationRemovedFromGroup)
+		
+
 
 		self.signalsInterface.registerListener("media_uploadRequestSuccess", self.onUploadRequestSuccess)
 		# self.signalsInterface.registerListener("media_uploadRequestFailed", self.onUploadRequestFailed)
@@ -360,6 +364,8 @@ class Server:
 		f = open(self.getImageThumbnailFile(asset), 'r')
 		stream = base64.b64encode(f.read())
 		f.close()    	
+		logging.info("Target %s" %target)
+		logging.info("URL %s" %asset.mms_url)
 		self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Image", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
 
 
@@ -369,10 +375,20 @@ class Server:
 		logging.info("To %s" %jid)
 		self.methodsInterface.call("message_send", (jid, text))	
 
+	def onGroupSubjectReceived(self,messageId,jid,author,subject,timestamp,receiptRequested):
+		print "Group subject received"
+		if receiptRequested and self.sendReceipts:
+			self.methodsInterface.call("message_ack", (jid, messageId))
+
 	def onGroupAddParticipantsSuccess(self, groupJid, jid):
 		logging.info("Added participant %s" %jid)
 		# check the profile pic
 		self.checkProfilePic(jid[0])
+
+	def onNotificationRemovedFromGroup(self, groupJid,jid):
+		print "Group Participant removed"
+		if receiptRequested and self.sendReceipts:
+			self.methodsInterface.call("message_ack", (jid, messageId))
 
 	def onGroupCreateSuccess(self, groupJid):
 		logging.info("Created with id %s" %groupJid)

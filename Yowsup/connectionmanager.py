@@ -861,7 +861,7 @@ class ReaderThread(threading.Thread):
 
 					elif ProtocolTreeNode.tagEquals(node,"presence"):
 						xmlns = node.getAttributeValue("xmlns")
-						jid = node.getAttributeValue("from")
+						jid = node.getAttributeValue("from")						
 
 						if (xmlns is None or xmlns == "urn:xmpp") and jid is not None:
 							presenceType = node.getAttributeValue("type")
@@ -872,12 +872,16 @@ class ReaderThread(threading.Thread):
 
 						elif xmlns == "w" and jid is not None:
 							status = node.getAttributeValue("status")
+							remove = node.getAttributeValue("remove")
 
 							if status == "dirty":
 								#categories = self.parseCategories(node); #@@TODO, send along with signal
 								self._d("WILL SEND DIRTY")
 								self.signalInterface.send("status_dirty")
 								self._d("SENT DIRTY")
+							elif status is None and remove is not None:
+								self._d("NOT DIRTY")
+								self.signalInterface.send("notification_removedFromGroup", (jid, remove,))
 
 					elif ProtocolTreeNode.tagEquals(node,"message"):
 						self.parseMessage(node)
