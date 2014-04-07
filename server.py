@@ -32,6 +32,7 @@ class Message(Base):
 class Asset(Base):
 	__tablename__ = 'assets'
 	id = Column(Integer, primary_key=True)
+	name = Column(String(255))
 	asset_hash = Column(String(255))
 	file_file_name = Column(String(255))
 	video_file_name = Column(String(255))
@@ -39,6 +40,8 @@ class Asset(Base):
 	mms_url = Column(String(255))
 	asset_type = Column(String(255))
 	file_file_size = Column(Integer)
+	audio_file_name = Column(String(255))
+	audio_file_size = Column(Integer)
 
 	def __init__(self, asset_hash, mms_url):
 		self.asset_hash = asset_hash
@@ -83,6 +86,8 @@ class Server:
 		self.signalsInterface.registerListener("image_received", self.onImageReceived)
 		self.signalsInterface.registerListener("video_received", self.onVideoReceived)
 		self.signalsInterface.registerListener("audio_received", self.onAudioReceived)
+		self.signalsInterface.registerListener("vcard_received", self.onVCardReceived)
+
 		
 		
 		self.signalsInterface.registerListener("auth_success", self.onAuthSuccess)
@@ -192,11 +197,33 @@ class Server:
 					if asset.mms_url == None:
 						self.requestMediaUrl(url, asset, preview)
 					job.sent = True
+				elif job.method == "uploadAudio":
+					args = job.args.encode('utf8').split(",")
+					asset_id = args[0]
+					url = args[1]
+					print "Asset Id: %s" %args[0]
+					asset = self.s.query(Asset).get(asset_id)
+					print "File name: %s" %asset.audio_file_name
+
+					if asset.mms_url == None:
+						self.requestMediaUrl(url, asset, None)
+					job.sent = True
 				elif job.method == "sendImage":
 					asset = self._getAsset(job.args)
 					jids = job.targets.split(",")
 					for jid in jids:
 						self.sendImage(jid + "@s.whatsapp.net", asset)
+					job.sent = True
+				elif job.method == "sendContact":
+					jids = job.targets.split(",")
+					for jid in jids:
+						self.sendVCard(jid + "@s.whatsapp.net")
+					job.sent = True
+				elif job.method == "sendAudio":
+					asset = self._getAsset(job.args)
+					jids = job.targets.split(",")
+					for jid in jids:
+						self.sendAudio(jid + "@s.whatsapp.net", asset)
 					job.sent = True
 				elif job.method == "broadcast_Video":
 					args = job.args.encode('utf8').split(",")
@@ -218,10 +245,7 @@ class Server:
 					self.methodsInterface.call("typing_send", ("%s@s.whatsapp.net" %job.targets,))
 					job.sent = True
 					time.sleep(3)
-					self.methodsInterface.call("typing_paused", ("%s@s.whatsapp.net" %job.targets,))
-
-
-				
+					self.methodsInterface.call("typing_paused", ("%s@s.whatsapp.net" %job.targets,))				
 		
 		self.s.commit()	
 
@@ -306,7 +330,7 @@ class Server:
 		if not url.startswith("http"):
 			url = os.environ['URL'] + url
 
-		if not preview.startswith("http"):
+		if preview is not None and not preview.startswith("http"):
 			preview = os.environ['URL'] + preview
 		
 		file_name = self.getImageFile(asset)
@@ -314,11 +338,11 @@ class Server:
 		fp.write(requests.get(url).content)
 		fp.close()
 
-
-		tb_path = self.getImageThumbnailFile(asset)
-		tb = open(tb_path, 'wb')
-		tb.write(requests.get(preview).content)
-		tb.close()
+		if asset.asset_type != "Audio":
+			tb_path = self.getImageThumbnailFile(asset)
+			tb = open(tb_path, 'wb')
+			tb.write(requests.get(preview).content)
+			tb.close()
 
 
 		fp = open(file_name, 'rb')
@@ -338,8 +362,12 @@ class Server:
 			path = "_%s"%asset.id + asset.file_file_name
 			file_name = "tmp/%s" %path
 			return file_name
-		else:
+		elif asset.asset_type == "Video":
 			path = "_%s"%asset.id + asset.video_file_name
+			file_name = "tmp/%s" %path
+			return file_name
+		elif asset.asset_type == "Audio":
+			path = "_%s"%asset.id + asset.audio_file_name
 			file_name = "tmp/%s" %path
 			return file_name
 
@@ -359,6 +387,41 @@ class Server:
 		f.close()
 		self.methodsInterface.call("message_videoSend",(target,asset.mms_url,"Video", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
 
+
+	def sendVCard(self, target):
+		card = "BEGIN:VCARD\r\n"
+		card += "VERSION:3.0\r\n"
+		# card += "CLASS:PUBLIC\r\n"
+		# card += "PRODID:-//class_vCard from WhatsAPI//NONSGML Version 1//EN\r\n"
+		card += "FN:%s\r\n" % os.environ['ACCOUNT_NAME']
+		card += "TEL;type=CELL,voice:+%s\r\n" % os.environ['TEL_NUMBER']
+		card += "PHOTO;"
+
+		f = open(os.environ['LOGO_PIC'], 'rb')
+		# sha1 = hashlib.sha256()
+
+		# sha1.update(f.read())
+		# hsh = base64.b64encode(sha1.digest())
+		hsh = base64.b64encode(f.read())
+
+		card += "BASE64:"
+		card += hsh
+		
+		# card += "URL:http://sprout.co.ke/images/logo.png"
+		card += "\r\n"
+		# card += "X-SOCIALPROFILE;type=twitter:http://twitter.com/joebloggs\r\n"
+		card += "END:VCARD\r\n"
+
+		print "data %s" %card
+		self.methodsInterface.call("message_vcardSend", (target, card, os.environ['ACCOUNT_NAME']))
+
+
+	def sendAudio(self, target, asset):
+		logging.info("Sending %s" %asset.mms_url)
+		logging.info("To %s" %target)
+		logging.info("Name %s" %asset.name)
+		logging.info("Size %s" %asset.audio_file_size)
+		self.methodsInterface.call("message_audioSend", (target, asset.mms_url, asset.name, str(asset.audio_file_size)))
 
 	def sendImage(self, target, asset):
 		f = open(self.getImageThumbnailFile(asset), 'r')
@@ -525,6 +588,10 @@ class Server:
 
 		self.checkProfilePic(jid)
 
+	
+	def onVCardReceived(self, messageId, jid, name, data, wantsReceipt, isBroadcast):
+		if wantsReceipt and self.sendReceipts:
+			self.methodsInterface.call("message_ack", (jid, messageId))
 
 	def onAudioReceived(self, messageId, jid, url, size, wantsReceipt, isBroadcast):
 		logging.info("Audio received %s" %messageId)
