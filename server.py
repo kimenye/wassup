@@ -102,6 +102,7 @@ class Server:
 		self.signalsInterface.registerListener("group_addParticipantsSuccess", self.onGroupAddParticipantsSuccess)
 		self.signalsInterface.registerListener("group_subjectReceived", self.onGroupSubjectReceived)
 		self.signalsInterface.registerListener("notification_removedFromGroup", self.onNotificationRemovedFromGroup)
+		self.signalsInterface.registerListener("group_gotParticipants", self.onGotGroupParticipants)
 		
 
 
@@ -162,6 +163,9 @@ class Server:
 				elif job.method == "group_addParticipants":
 					params = job.args.encode('utf8').split(",")
 					self.methodsInterface.call(job.method.encode('utf8'), (params[0], [params[1] + "@s.whatsapp.net"],))
+					job.sent = True
+				elif job.method == "group_getParticipants":				
+					self.methodsInterface.call('group_getParticipants', (job.targets.encode('utf8'),))
 					job.sent = True
 				elif job.method == "contact_getProfilePicture":
 					self.methodsInterface.call("contact_getProfilePicture", (job.args.encode('utf8'),))
@@ -439,9 +443,15 @@ class Server:
 		self.methodsInterface.call("message_send", (jid, text))	
 
 	def onGroupSubjectReceived(self,messageId,jid,author,subject,timestamp,receiptRequested):
-		print "Group subject received"
+		logging.info("Group subject received")
 		if receiptRequested and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
+
+		put_url = self.url  + "/groups"
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		data = { "name" : subject, "group_type" : "External", "jid" : jid }
+		r = requests.post(put_url, data=json.dumps(data), headers=headers)
+		logging.info("Updated the group")
 
 	def onGroupAddParticipantsSuccess(self, groupJid, jid):
 		logging.info("Added participant %s" %jid)
@@ -449,9 +459,25 @@ class Server:
 		self.checkProfilePic(jid[0])
 
 	def onNotificationRemovedFromGroup(self, groupJid,jid):
-		print "Group Participant removed"
-		if receiptRequested and self.sendReceipts:
-			self.methodsInterface.call("message_ack", (jid, messageId))
+		logging.info("You were removed from the group %s" %groupJid)
+		# print "Group Participant removed %s" %groupJid
+
+		# print "Group Participant removed %s" %jid
+
+		put_url = self.url  + "/groups/disable_group"
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		data = { "groupJid" : groupJid }
+		r = requests.post(put_url, data=json.dumps(data), headers=headers)
+		logging.info("Updated the group")
+
+
+	def onGotGroupParticipants(self, groupJid, jids):
+		print "Got group participants"
+
+		put_url = self.url  + "/groups/update_membership"
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		data = { "groupJid" : groupJid, "jids" : jids }
+		r = requests.post(put_url, data=json.dumps(data), headers=headers)
 
 	def onGroupCreateSuccess(self, groupJid):
 		logging.info("Created with id %s" %groupJid)
@@ -459,7 +485,6 @@ class Server:
 
 	def onGroupGotInfo(self,jid,owner,subject,subjectOwner,subjectTimestamp,creationTimestamp):
 		logging.info("Group info %s - %s" %(jid, subject))
-
 		
 		put_url = self.url + "/update_group"
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
@@ -537,6 +562,17 @@ class Server:
 		r = requests.post(post_url, data=json.dumps(data), headers=headers)
 
 		self.checkProfilePic(author)
+
+		channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
+		self.pubnub.publish({
+			'channel' : channel,
+			'message' : {
+				'type' : 'text',
+				'phone_number' : jid,
+				'text' : content,
+				'name' : pushName
+			}
+		})
 
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
 		logging.info('Message Received %s' %messageContent)

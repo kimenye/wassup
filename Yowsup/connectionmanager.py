@@ -880,8 +880,10 @@ class ReaderThread(threading.Thread):
 								self.signalInterface.send("status_dirty")
 								self._d("SENT DIRTY")
 							elif status is None and remove is not None:
-								self._d("NOT DIRTY")
+								# self._d("NOT DIRTY")
+
 								self.signalInterface.send("notification_removedFromGroup", (jid, remove,))
+								self._d("Sent notification_removedFromGroup")
 
 					elif ProtocolTreeNode.tagEquals(node,"message"):
 						self.parseMessage(node)
