@@ -171,6 +171,7 @@ class Server:
 					self.methodsInterface.call("contact_getProfilePicture", (job.args.encode('utf8'),))
 					job.sent = True
 				elif job.method == "sendMessage":
+					logging.info("Job %s" %job.sent)
 					self.sendMessage(job.targets.encode('utf8'), job.args.encode('utf8'))
 					job.sent = True
 				elif job.method == "broadcast_Text":
@@ -253,6 +254,7 @@ class Server:
 					job.sent = True
 					time.sleep(3)
 					self.methodsInterface.call("typing_paused", ("%s@s.whatsapp.net" %job.targets,))				
+					time.sleep(2)
 		
 		self.s.commit()	
 
