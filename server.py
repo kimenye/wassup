@@ -130,18 +130,18 @@ class Server:
 		self.methodsInterface.call("presence_sendAvailable", ())
 
 		while not self.done:
-			# logging.info('Waiting')		
-			messages = self.s.query(Message).filter_by(sent=False).all()			
-			if len(messages) > 0:
-				logging.info("Messages %s" % len(messages))
+			logging.info('Waiting')		
+			# messages = self.s.query(Message).filter_by(sent=False).all()			
+			# if len(messages) > 0:
+			# 	logging.info("Messages %s" % len(messages))
 			
-			for message in messages:
-				logging.info("Phone Number : %s" %message.phone_number)
-				logging.info("Message : %s" %message.message)
+			# for message in messages:
+			# 	logging.info("Phone Number : %s" %message.phone_number)
+			# 	logging.info("Message : %s" %message.message)
 
-				if self._onSchedule(message.scheduled_time):
-					self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
-					message.sent = True
+			# 	if self._onSchedule(message.scheduled_time):
+			# 		self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
+			# 		message.sent = True
 
 			self.s.commit()	
 			self.seekJobs()
@@ -169,6 +169,9 @@ class Server:
 					job.sent = True
 				elif job.method == "contact_getProfilePicture":
 					self.methodsInterface.call("contact_getProfilePicture", (job.args.encode('utf8'),))
+					job.sent = True
+				elif job.method == "sendMessage":
+					self.sendMessage(job.targets.encode('utf8'), job.args.encode('utf8'))
 					job.sent = True
 				elif job.method == "broadcast_Text":
 					jids = job.targets.split(",")
