@@ -438,6 +438,7 @@ class Server:
 		f.close()    	
 		logging.info("Target %s" %target)
 		logging.info("URL %s" %asset.mms_url)
+		logging.info("URL %s" %asset.asset_hash)
 		self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Image", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
 
 
