@@ -130,7 +130,7 @@ class Server:
 		self.methodsInterface.call("presence_sendAvailable", ())
 
 		while not self.done:
-			logging.info('Waiting')		
+			# logging.info('Waiting')		
 			# messages = self.s.query(Message).filter_by(sent=False).all()			
 			# if len(messages) > 0:
 			# 	logging.info("Messages %s" % len(messages))
@@ -466,9 +466,6 @@ class Server:
 
 	def onNotificationRemovedFromGroup(self, groupJid,jid):
 		logging.info("You were removed from the group %s" %groupJid)
-		# print "Group Participant removed %s" %groupJid
-
-		# print "Group Participant removed %s" %jid
 
 		put_url = self.url  + "/groups/disable_group"
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
@@ -478,7 +475,7 @@ class Server:
 
 
 	def onGotGroupParticipants(self, groupJid, jids):
-		print "Got group participants"
+		logging.info("Got group participants")
 
 		put_url = self.url  + "/groups/update_membership"
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
