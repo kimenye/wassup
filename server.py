@@ -56,6 +56,7 @@ class Job(Base):
 	args = Column(String(255))
 	sent = Column(Boolean())
 	scheduled_time = Column(DateTime())
+	simulate = Column(Boolean())
 
 	def __init__(self, method, targets, sent, args, scheduled_time):
 		self.method = method
@@ -87,6 +88,8 @@ class Server:
 		self.signalsInterface.registerListener("video_received", self.onVideoReceived)
 		self.signalsInterface.registerListener("audio_received", self.onAudioReceived)
 		self.signalsInterface.registerListener("vcard_received", self.onVCardReceived)
+		self.signalsInterface.registerListener("receipt_messageSent", self.onReceiptMessageSent)
+		self.signalsInterface.registerListener("receipt_messageDelivered", self.onReceiptMessageDelivered)
 
 		
 		
@@ -171,7 +174,13 @@ class Server:
 					self.methodsInterface.call("contact_getProfilePicture", (job.args.encode('utf8'),))
 					job.sent = True
 				elif job.method == "sendMessage":
-					logging.info("Job %s" %job.sent)
+					
+					if job.simulate == True:
+						self.methodsInterface.call("typing_send", (job.targets,))
+						time.sleep(2)
+						self.methodsInterface.call("typing_paused", (job.targets,))
+						time.sleep(1)	
+
 					self.sendMessage(job.targets.encode('utf8'), job.args.encode('utf8'))
 					job.sent = True
 				elif job.method == "broadcast_Text":
@@ -209,9 +218,9 @@ class Server:
 					args = job.args.encode('utf8').split(",")
 					asset_id = args[0]
 					url = args[1]
-					print "Asset Id: %s" %args[0]
+					logging.info("Asset Id: %s" %args[0])
 					asset = self.s.query(Asset).get(asset_id)
-					print "File name: %s" %asset.audio_file_name
+					logging.info("File name: %s" %asset.audio_file_name)
 
 					if asset.mms_url == None:
 						self.requestMediaUrl(url, asset, None)
@@ -250,11 +259,11 @@ class Server:
 					self.sendVideo(job.targets, asset)
 					job.sent = True
 				elif job.method == "typing_send":
-					self.methodsInterface.call("typing_send", ("%s@s.whatsapp.net" %job.targets,))
+					# self.methodsInterface.call("typing_send", ("%s@s.whatsapp.net" %job.targets,))
 					job.sent = True
-					time.sleep(3)
-					self.methodsInterface.call("typing_paused", ("%s@s.whatsapp.net" %job.targets,))				
-					time.sleep(2)
+					# time.sleep(3)
+					# self.methodsInterface.call("typing_paused", ("%s@s.whatsapp.net" %job.targets,))				
+					# time.sleep(2)
 		
 		self.s.commit()	
 
@@ -265,6 +274,15 @@ class Server:
 		args = args.encode('utf8').split(",")
 		asset_id = args[0]
 		return self.s.query(Asset).get(asset_id)
+
+	def onReceiptMessageDelivered(self, jid, messageId):
+		logging.info("Delivered %s" %messageId)
+		logging.info("From %s" %jid)
+
+
+	def onReceiptMessageSent(self, jid, messageId):
+		logging.info("Sent %s" %messageId)
+		logging.info("To %s" %jid)
 
 	def onPresenceAvailable(self, jid):
 		logging.info("JID available %s" %jid)
