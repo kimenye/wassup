@@ -444,7 +444,7 @@ class Server:
 
 
 	def sendMessage(self, target, text):
-		logging.info("Message %s " %text)
+		logging.info("Message %s" %text)
 		jid = target
 		logging.info("To %s" %jid)
 		rst = self.methodsInterface.call("message_send", (jid, text))	
