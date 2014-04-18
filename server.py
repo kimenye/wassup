@@ -17,17 +17,13 @@ logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='
 
 
 class Message(Base):
-	__tablename__ = 'job_messages'
+	__tablename__ = 'messages'
 	id = Column(Integer, primary_key=True)
-	phone_number = Column(String(255))
-	message = Column(String(255))
-	sent = Column(Boolean())
-	scheduled_time = Column(DateTime())
+	received = Column(Boolean())
 
-	def __init__(self, phone_number, message, sent):
-		self.phone_number = phone_number
-		self.message = message
-		self.sent = sent
+	def __init__(self, received):
+		self.received = received
+
 
 class Asset(Base):
 	__tablename__ = 'assets'
@@ -57,6 +53,10 @@ class Job(Base):
 	sent = Column(Boolean())
 	scheduled_time = Column(DateTime())
 	simulate = Column(Boolean())
+	whatsapp_message_id = Column(String(255))
+	received = Column(String(255))
+	receipt_timestamp = Column(DateTime())
+	message_id = Column(Integer)
 
 	def __init__(self, method, targets, sent, args, scheduled_time):
 		self.method = method
@@ -133,27 +133,13 @@ class Server:
 		self.methodsInterface.call("presence_sendAvailable", ())
 
 		while not self.done:
-			# logging.info('Waiting')		
-			# messages = self.s.query(Message).filter_by(sent=False).all()			
-			# if len(messages) > 0:
-			# 	logging.info("Messages %s" % len(messages))
-			
-			# for message in messages:
-			# 	logging.info("Phone Number : %s" %message.phone_number)
-			# 	logging.info("Message : %s" %message.message)
-
-			# 	if self._onSchedule(message.scheduled_time):
-			# 		self.sendMessage(message.phone_number.encode('utf8'), message.message.encode('utf8'))
-			# 		message.sent = True
-
-			self.s.commit()	
 			self.seekJobs()
-			time.sleep(1)
+			time.sleep(2)
 	
 	def seekJobs(self):
 		jobs = self.s.query(Job).filter_by(sent=False).all()
 		if len(jobs) > 0:
-			logging.info("Jobs %s" % len(jobs))
+			logging.info("Pending Jobs %s" % len(jobs))
 
 		for job in jobs:
 			if self._onSchedule(job.scheduled_time):
@@ -177,11 +163,9 @@ class Server:
 					
 					if job.simulate == True:
 						self.methodsInterface.call("typing_send", (job.targets,))
-						time.sleep(2)
 						self.methodsInterface.call("typing_paused", (job.targets,))
-						time.sleep(1)	
 
-					self.sendMessage(job.targets.encode('utf8'), job.args.encode('utf8'))
+					job.whatsapp_message_id = self.sendMessage(job.targets.encode('utf8'), job.args.encode('utf8'))
 					job.sent = True
 				elif job.method == "broadcast_Text":
 					jids = job.targets.split(",")
@@ -259,11 +243,8 @@ class Server:
 					self.sendVideo(job.targets, asset)
 					job.sent = True
 				elif job.method == "typing_send":
-					# self.methodsInterface.call("typing_send", ("%s@s.whatsapp.net" %job.targets,))
 					job.sent = True
-					# time.sleep(3)
-					# self.methodsInterface.call("typing_paused", ("%s@s.whatsapp.net" %job.targets,))				
-					# time.sleep(2)
+
 		
 		self.s.commit()	
 
@@ -278,6 +259,20 @@ class Server:
 	def onReceiptMessageDelivered(self, jid, messageId):
 		logging.info("Delivered %s" %messageId)
 		logging.info("From %s" %jid)
+		# self.s.query(Job).filter_by(sent=False).all()
+
+		session = self.Session()
+		job = session.query(Job).filter_by(sent=True, whatsapp_message_id=messageId).scalar()
+		if job is not None:
+			job.received = True
+			session.commit()
+
+		m = session.query(Message).get(job.message_id)
+		logging.info("Looking for message with id %s" %job.message_id)
+		if m is not None:
+			m.received = True
+			session.commit()
+
 
 
 	def onReceiptMessageSent(self, jid, messageId):
@@ -297,7 +292,7 @@ class Server:
 		logging.info("The hash is %s" %_hash)	
 
 		asset = self.s.query(Asset).filter_by(asset_hash=_hash).first()
-		print "Asset id %s" %asset.mms_url
+		logging.info("Asset id %s" %asset.mms_url)
 		asset.mms_url = url
 		self.s.commit()
 
@@ -322,8 +317,6 @@ class Server:
 		asset.mms_url = url
 		self.s.commit()
 
-		# path = "tmp/" + asset.file_file_name + "_%s" %asset.id 
-		# path = "tmp/_%s"%asset.id + asset.file_file_name
 		path = self.getImageFile(asset)
 
 		logging.info("To upload %s" %path)
@@ -343,8 +336,6 @@ class Server:
 
 	def onUploadError(self):
 		logging.info("Error with upload")
-
-	# def onUploadRequestFailed()
 
 	def onUploadProgress(self, progress):
 		logging.info("Upload Progress")
@@ -418,28 +409,20 @@ class Server:
 	def sendVCard(self, target):
 		card = "BEGIN:VCARD\r\n"
 		card += "VERSION:3.0\r\n"
-		# card += "CLASS:PUBLIC\r\n"
-		# card += "PRODID:-//class_vCard from WhatsAPI//NONSGML Version 1//EN\r\n"
 		card += "FN:%s\r\n" % os.environ['ACCOUNT_NAME']
 		card += "TEL;type=CELL,voice:+%s\r\n" % os.environ['TEL_NUMBER']
 		card += "PHOTO;"
 
 		f = open(os.environ['LOGO_PIC'], 'rb')
-		# sha1 = hashlib.sha256()
-
-		# sha1.update(f.read())
-		# hsh = base64.b64encode(sha1.digest())
 		hsh = base64.b64encode(f.read())
 
 		card += "BASE64:"
 		card += hsh
 		
-		# card += "URL:http://sprout.co.ke/images/logo.png"
 		card += "\r\n"
-		# card += "X-SOCIALPROFILE;type=twitter:http://twitter.com/joebloggs\r\n"
 		card += "END:VCARD\r\n"
 
-		print "data %s" %card
+		logging.info("data %s" %card)
 		self.methodsInterface.call("message_vcardSend", (target, card, os.environ['ACCOUNT_NAME']))
 
 
@@ -464,7 +447,8 @@ class Server:
 		logging.info("Message %s " %text)
 		jid = target
 		logging.info("To %s" %jid)
-		self.methodsInterface.call("message_send", (jid, text))	
+		rst = self.methodsInterface.call("message_send", (jid, text))	
+		return rst
 
 	def onGroupSubjectReceived(self,messageId,jid,author,subject,timestamp,receiptRequested):
 		logging.info("Group subject received")
@@ -682,7 +666,6 @@ class Server:
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		logging.info('Profile picture received')
-		# url = os.getenv('SERVER_URL', 'http://localhost:3000')
 		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload"
 		files = {'file': open(filePath, 'rb')}
 		r = requests.post(url, files=files)
