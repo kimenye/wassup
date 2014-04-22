@@ -76,6 +76,7 @@ class Server:
 
 		self.pubnub = Pubnub(os.environ['PUB_KEY'], os.environ['SUB_KEY'], None, False)
 
+
 		connectionManager = YowsupConnectionManager()
 		connectionManager.setAutoPong(keepAlive)		
 
@@ -129,6 +130,7 @@ class Server:
 		self.username = username
 		self.password = password
 
+		self.pubnub_channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
 		self.methodsInterface.call("auth_login", (username, self.password))
 		self.methodsInterface.call("presence_sendAvailable", ())
 
@@ -271,6 +273,13 @@ class Server:
 		logging.info("Looking for message with id %s" %job.message_id)
 		if m is not None:
 			m.received = True
+			self.pubnub.publish({
+				'channel' : self.pubnub_channel,
+				'message' : {
+					'type' : 'receipt',
+					'message_id' : m.id
+				}
+			})
 			session.commit()
 
 
