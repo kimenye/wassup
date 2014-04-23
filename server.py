@@ -220,7 +220,7 @@ class Server:
 				elif job.method == "sendContact":
 					jids = job.targets.split(",")
 					for jid in jids:
-						self.sendVCard(jid + "@s.whatsapp.net")
+						self.sendVCard(jid)
 					job.sent = True
 				elif job.method == "sendAudio":
 					asset = self._getAsset(job.args)
@@ -269,18 +269,18 @@ class Server:
 			job.received = True
 			session.commit()
 
-		m = session.query(Message).get(job.message_id)
-		logging.info("Looking for message with id %s" %job.message_id)
-		if m is not None:
-			m.received = True
-			self.pubnub.publish({
-				'channel' : self.pubnub_channel,
-				'message' : {
-					'type' : 'receipt',
-					'message_id' : m.id
-				}
-			})
-			session.commit()
+			m = session.query(Message).get(job.message_id)
+			logging.info("Looking for message with id %s" %job.message_id)
+			if m is not None:
+				m.received = True
+				self.pubnub.publish({
+					'channel' : self.pubnub_channel,
+					'message' : {
+						'type' : 'receipt',
+						'message_id' : m.id
+					}
+				})
+				session.commit()
 
 
 
