@@ -420,15 +420,15 @@ class Server:
 		card += "VERSION:3.0\r\n"
 		card += "FN:%s\r\n" % os.environ['ACCOUNT_NAME']
 		card += "TEL;type=CELL,voice:+%s\r\n" % os.environ['TEL_NUMBER']
-		card += "PHOTO;"
+		#card += "PHOTO;"
 
-		f = open(os.environ['LOGO_PIC'], 'rb')
-		hsh = base64.b64encode(f.read())
+		#f = open(os.environ['LOGO_PIC'], 'rb')
+		#hsh = base64.b64encode(f.read())
 
-		card += "BASE64:"
-		card += hsh
+		#card += "BASE64:"
+		#card += hsh
 		
-		card += "\r\n"
+		#card += "\r\n"
 		card += "END:VCARD\r\n"
 
 		logging.info("data %s" %card)
