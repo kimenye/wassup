@@ -280,6 +280,12 @@ class Server:
 						'message_id' : m.id
 					}
 				})
+
+				headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+				data = { "receipt" : { "message_id" : m.id } }
+				post_url = self.url + "/receipt"
+				r = requests.post(post_url, data=json.dumps(data), headers=headers)
+
 				session.commit()
 
 
