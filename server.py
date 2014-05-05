@@ -104,6 +104,8 @@ class Server:
 		self.signalsInterface.registerListener("group_createFail", self.onGroupCreateFail)
 		self.signalsInterface.registerListener("group_gotInfo", self.onGroupGotInfo)
 		self.signalsInterface.registerListener("group_addParticipantsSuccess", self.onGroupAddParticipantsSuccess)
+		self.signalsInterface.registerListener("group_removeParticipantsSuccess", self.onGroupRemoveParticipantsSuccess)
+
 		self.signalsInterface.registerListener("group_subjectReceived", self.onGroupSubjectReceived)
 		self.signalsInterface.registerListener("notification_removedFromGroup", self.onNotificationRemovedFromGroup)
 		self.signalsInterface.registerListener("group_gotParticipants", self.onGotGroupParticipants)
@@ -152,6 +154,10 @@ class Server:
 					self.methodsInterface.call(job.method.encode('utf8'), (job.args.encode('utf8'),))
 					job.sent = True
 				elif job.method == "group_addParticipants":
+					params = job.args.encode('utf8').split(",")
+					self.methodsInterface.call(job.method.encode('utf8'), (params[0], [params[1] + "@s.whatsapp.net"],))
+					job.sent = True
+				elif job.method == "group_removeParticipants":
 					params = job.args.encode('utf8').split(",")
 					self.methodsInterface.call(job.method.encode('utf8'), (params[0], [params[1] + "@s.whatsapp.net"],))
 					job.sent = True
@@ -480,6 +486,11 @@ class Server:
 		logging.info("Added participant %s" %jid)
 		# check the profile pic
 		self.checkProfilePic(jid[0])
+
+	def onGroupRemoveParticipantsSuccess(self, groupJid, jid):
+		logging.info("Removed participant %s" %jid)
+
+
 
 	def onNotificationRemovedFromGroup(self, groupJid,jid):
 		logging.info("You were removed from the group %s" %groupJid)
