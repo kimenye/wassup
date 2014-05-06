@@ -20,6 +20,7 @@ class Message(Base):
 	__tablename__ = 'messages'
 	id = Column(Integer, primary_key=True)
 	received = Column(Boolean())
+	receipt_timestamp = Column(DateTime())
 
 	def __init__(self, received):
 		self.received = received
@@ -279,6 +280,7 @@ class Server:
 			logging.info("Looking for message with id %s" %job.message_id)
 			if m is not None:
 				m.received = True
+				m.receipt_timestamp = datetime.now()
 				self.pubnub.publish({
 					'channel' : self.pubnub_channel,
 					'message' : {
