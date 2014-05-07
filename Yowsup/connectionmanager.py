@@ -42,7 +42,7 @@ import sys
 import traceback
 class YowsupConnectionManager:
 	
-	def __init__(self):
+	def __init__(self, timeout):
 		Debugger.attach(self)
 		self.currKeyId = 1
 		self.iqId = 0
@@ -52,6 +52,7 @@ class YowsupConnectionManager:
 		self.autoPong = True
 		
 		self.domain = "s.whatsapp.net"
+		self.customTimeout = timeout
 	
 		#self.methodInterface = MethodInterface(authenticatedSocketConnection.getId())
 		#self.signalInterface = SignalInterface(authenticatedSocketConnection.getId())
@@ -59,7 +60,7 @@ class YowsupConnectionManager:
 		
 		self.methodInterface = LibMethodInterface()
 		self.signalInterface = LibSignalInterface()
-		self.readerThread = ReaderThread()
+		self.readerThread = ReaderThread(timeout)
 		self.readerThread.setSignalInterface(self.signalInterface)
 		
 
@@ -233,7 +234,7 @@ class YowsupConnectionManager:
 			if self.readerThread.isAlive():
 				raise Exception("TWO READER THREADS ON BOARD!!")
 			
-			self.readerThread = ReaderThread()
+			self.readerThread = ReaderThread(self.customTimeout)
 			self.readerThread.autoPong = self.autoPong
 			self.readerThread.setSignalInterface(self.signalInterface)
 			yAuth = YowsupAuth(ConnectionEngine())
@@ -702,14 +703,15 @@ class YowsupConnectionManager:
 
 
 class ReaderThread(threading.Thread):
-	def __init__(self):
+	def __init__(self, timeout):
 		Debugger.attach(self);
 
 		self.signalInterface = None
 		#self.socket = connection
 		self.terminateRequested = False
 		self.disconnectedSent = False
-		self.timeout = 43200
+		# self.timeout = 43200
+		self.timeout = timeout
 		self.selectTimeout = 3
 		self.requests = {};
 		self.lock = threading.Lock()

@@ -77,8 +77,9 @@ class Server:
 
 		self.pubnub = Pubnub(os.environ['PUB_KEY'], os.environ['SUB_KEY'], None, False)
 
+		self.timeout = int(os.getenv('TIMEOUT', 3600))
+		connectionManager = YowsupConnectionManager(self.timeout)
 
-		connectionManager = YowsupConnectionManager()
 		connectionManager.setAutoPong(keepAlive)		
 
 		self.signalsInterface = connectionManager.getSignalsInterface()
