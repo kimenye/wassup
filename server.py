@@ -150,24 +150,24 @@ class Server:
 		for job in jobs:
 			if self._onSchedule(job.scheduled_time):
 				if job.method == "profile_setStatus":
-					self.methodsInterface.call(job.method.encode('utf8'), (job.args.encode('utf8'),))
+					self.methodsInterface.call(job.method, (job.args,))
 					job.sent = True
 				elif job.method == "group_create":
-					self.methodsInterface.call(job.method.encode('utf8'), (job.args.encode('utf8'),))
+					self.methodsInterface.call(job.method, (job.args,))
 					job.sent = True
 				elif job.method == "group_addParticipants":
-					params = job.args.encode('utf8').split(",")
-					self.methodsInterface.call(job.method.encode('utf8'), (params[0], [params[1] + "@s.whatsapp.net"],))
+					params = job.args.split(",")
+					self.methodsInterface.call(job.method, (params[0], [params[1] + "@s.whatsapp.net"],))
 					job.sent = True
 				elif job.method == "group_removeParticipants":
-					params = job.args.encode('utf8').split(",")
-					self.methodsInterface.call(job.method.encode('utf8'), (params[0], [params[1] + "@s.whatsapp.net"],))
+					params = job.args.split(",")
+					self.methodsInterface.call(job.method, (params[0], [params[1] + "@s.whatsapp.net"],))
 					job.sent = True
 				elif job.method == "group_getParticipants":				
-					self.methodsInterface.call('group_getParticipants', (job.targets.encode('utf8'),))
+					self.methodsInterface.call('group_getParticipants', (job.targets,))
 					job.sent = True
 				elif job.method == "contact_getProfilePicture":
-					self.methodsInterface.call("contact_getProfilePicture", (job.args.encode('utf8'),))
+					self.methodsInterface.call("contact_getProfilePicture", (job.args,))
 					job.sent = True
 				elif job.method == "sendMessage":
 					
@@ -175,7 +175,7 @@ class Server:
 						self.methodsInterface.call("typing_send", (job.targets,))
 						self.methodsInterface.call("typing_paused", (job.targets,))
 
-					job.whatsapp_message_id = self.sendMessage(job.targets.encode('utf8'), job.args.encode('utf8'))
+					job.whatsapp_message_id = self.sendMessage(job.targets, job.args)
 					job.sent = True
 				elif job.method == "broadcast_Text":
 					jids = job.targets.split(",")
@@ -186,7 +186,7 @@ class Server:
 
 					job.sent = True
 				elif job.method == "broadcast_Image":
-					args = job.args.encode('utf8').split(",")
+					args = job.args.split(",")
 					asset_id = args[0]
 					asset = self.s.query(Asset).get(asset_id)
 					jids = job.targets.split(",")
@@ -195,7 +195,7 @@ class Server:
 						time.sleep(1)
 					job.sent = True
 				elif job.method == "uploadMedia":
-					args = job.args.encode('utf8').split(",")
+					args = job.args.split(",")
 					asset_id = args[0]
 					url = args[1]
 					preview = args[2]
@@ -209,7 +209,7 @@ class Server:
 						self.requestMediaUrl(url, asset, preview)
 					job.sent = True
 				elif job.method == "uploadAudio":
-					args = job.args.encode('utf8').split(",")
+					args = job.args.split(",")
 					asset_id = args[0]
 					url = args[1]
 					logging.info("Asset Id: %s" %args[0])
@@ -237,7 +237,7 @@ class Server:
 						self.sendAudio(jid + "@s.whatsapp.net", asset)
 					job.sent = True
 				elif job.method == "broadcast_Video":
-					args = job.args.encode('utf8').split(",")
+					args = job.args.split(",")
 					asset = self._getAsset(job.args)
 					jids = job.targets.split(",")
 					for jid in jids:
@@ -262,7 +262,7 @@ class Server:
 		return (scheduled_time is None or datetime.now() > self.utc_to_local(scheduled_time))
 
 	def _getAsset(self, args):
-		args = args.encode('utf8').split(",")
+		args = args.split(",")
 		asset_id = args[0]
 		return self.s.query(Asset).get(asset_id)
 
