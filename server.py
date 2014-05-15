@@ -91,6 +91,7 @@ class Server:
 		self.signalsInterface.registerListener("video_received", self.onVideoReceived)
 		self.signalsInterface.registerListener("audio_received", self.onAudioReceived)
 		self.signalsInterface.registerListener("vcard_received", self.onVCardReceived)
+		self.signalsInterface.registerListener("location_received", self.onLocationReceived)
 		self.signalsInterface.registerListener("receipt_messageSent", self.onReceiptMessageSent)
 		self.signalsInterface.registerListener("receipt_messageDelivered", self.onReceiptMessageDelivered)
 
@@ -630,7 +631,21 @@ class Server:
 			}
 		})
 		
-		self.checkProfilePic(jid)	
+		self.checkProfilePic(jid)
+
+	def onLocationReceived(self, messageId, jid, name, preview, latitude, longitude, wantsReceipt, isBroadcast):
+		logging.info('Location Received')	
+		phone_number = jid.split("@")[0]
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		data = { "location" : { 'latitude' : latitude, 'longitude': longitude, 'preview' : preview, 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : name } }
+
+		post_url = self.url + "/locations"
+
+		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+
+		if wantsReceipt and self.sendReceipts:
+			self.methodsInterface.call("message_ack", (jid, messageId))
+
 
 	def onImageReceived(self, messageId, jid, preview, url, size, wantsReceipt, isBroadCast):	
 		logging.info('Image Received')	
