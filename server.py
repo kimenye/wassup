@@ -7,6 +7,7 @@ from Yowsup.Common.utilities import Utilities
 from Yowsup.Media.uploader import MediaUploader
 import os, json, base64, time, requests, hashlib, datetime
 import logging
+import vobject
 
 import calendar
 from datetime import datetime, timedelta
@@ -674,9 +675,20 @@ class Server:
 		self.checkProfilePic(jid)
 
 	
-	def onVCardReceived(self, messageId, jid, name, data, wantsReceipt, isBroadcast):
+	def onVCardReceived(self, messageId, jid, name, data, wantsReceipt, isBroadcast):		
+		post_url = self.url + "/vcards"
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json' }
+		
+		vcard = vobject.readOne( data )
+		vcard.prettyPrint()
+
+		data = { "vcard" : { 'phone_number' : jid.split("@")[0], 'whatsapp_message_id' : messageId, 'data' : vcard.serialize() }}
+
+		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
+
 
 	def onAudioReceived(self, messageId, jid, url, size, wantsReceipt, isBroadcast):
 		logging.info("Audio received %s" %messageId)
