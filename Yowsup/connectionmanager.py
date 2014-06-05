@@ -875,6 +875,8 @@ class ReaderThread(threading.Thread):
 						elif xmlns == "w" and jid is not None:
 							status = node.getAttributeValue("status")
 							remove = node.getAttributeValue("remove")
+							add = node.getAttributeValue("add")
+							frm = node.getAttributeValue("from")
 
 							if status == "dirty":
 								#categories = self.parseCategories(node); #@@TODO, send along with signal
@@ -886,6 +888,10 @@ class ReaderThread(threading.Thread):
 
 								self.signalInterface.send("notification_removedFromGroup", (jid, remove,))
 								self._d("Sent notification_removedFromGroup")
+							elif status is None and remove is None and add is not None and frm is not None:
+								
+								self.signalInterface.send("notification_groupParticipantAdded", (frm, add,))
+								self._d("Send notification_groupParticipantAdded")
 
 					elif ProtocolTreeNode.tagEquals(node,"message"):
 						self.parseMessage(node)

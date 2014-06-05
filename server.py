@@ -112,6 +112,7 @@ class Server:
 
 		self.signalsInterface.registerListener("group_subjectReceived", self.onGroupSubjectReceived)
 		self.signalsInterface.registerListener("notification_removedFromGroup", self.onNotificationRemovedFromGroup)
+		self.signalsInterface.registerListener("notification_groupParticipantAdded", self.onNotificationGroupParticipantAdded)
 		self.signalsInterface.registerListener("group_gotParticipants", self.onGotGroupParticipants)
 		
 
@@ -495,14 +496,22 @@ class Server:
 	def onGroupRemoveParticipantsSuccess(self, groupJid, jid):
 		logging.info("Removed participant %s" %jid)
 
+	def onNotificationGroupParticipantAdded(self, groupJid, jid):
+		logging.info("Group participant removed %s" %jid)
+		
+		put_url = self.url + "/groups/add_member"
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		data = { "groupJid" : groupJid, "phone_number": jid.split("@")[0] }
+		
+		r = requests.post(put_url, data=json.dumps(data), headers=headers)
 
 
 	def onNotificationRemovedFromGroup(self, groupJid,jid):
 		logging.info("You were removed from the group %s" %groupJid)
 
-		put_url = self.url  + "/groups/disable_group"
+		put_url = self.url  + "/groups/remove_member"
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
-		data = { "groupJid" : groupJid }
+		data = { "groupJid" : groupJid, 'phone_number': jid.split("@")[0] }
 		r = requests.post(put_url, data=json.dumps(data), headers=headers)
 		logging.info("Updated the group")
 
