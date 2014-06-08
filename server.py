@@ -26,6 +26,13 @@ class Message(Base):
 	def __init__(self, received):
 		self.received = received
 
+class Account(Base):
+	__tablename__ = 'accounts'
+	id = Column(Integer, primary_key=True)
+	whatsapp_password = Column(String(255))
+	phone_number = Column(String(255))
+	setup = Column(Boolean())
+
 
 class Asset(Base):
 	__tablename__ = 'assets'
@@ -59,6 +66,7 @@ class Job(Base):
 	received = Column(String(255))
 	receipt_timestamp = Column(DateTime())
 	message_id = Column(Integer)
+	account_id = Column(Integer)
 
 	def __init__(self, method, targets, sent, args, scheduled_time):
 		self.method = method
@@ -132,10 +140,14 @@ class Server:
 		print "Upload failed"
 	
 
-	def login(self, username, password):
+	def login(self, username, password, id):
 		logging.info('In Login')
 		self.username = username
 		self.password = password
+		self.account_id = id
+
+		# print username
+		# print password
 
 		self.pubnub_channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
 		self.methodsInterface.call("auth_login", (username, self.password))
@@ -146,7 +158,7 @@ class Server:
 			time.sleep(2)
 	
 	def seekJobs(self):
-		jobs = self.s.query(Job).filter_by(sent=False).all()
+		jobs = self.s.query(Job).filter_by(sent=False, account_id=self.account_id).all()
 		if len(jobs) > 0:
 			logging.info("Pending Jobs %s" % len(jobs))
 
@@ -573,7 +585,7 @@ class Server:
 		self.setStatus(0, "Got disconnected")
 		# self.done = True
 		logging.info('About to log in again with %s and %s' %(self.username, self.password))
-		self.login(self.username, self.password)
+		self.login(self.username, self.password, self.id)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		logging.info('Got profile picture')
@@ -619,13 +631,20 @@ class Server:
 			}
 		})
 
+	def post(self, url, data):
+		data.update(account = self.username)
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		r = requests.post(self.url + url, data=json.dumps(data), headers=headers)
+
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
 		logging.info('Message Received %s' %messageContent)
 		phone_number = jid.split("@")[0]
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		# headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName  }}
-		post_url = self.url + "/messages"
-		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+		# post_url = self.url + "/messages"
+
+		# r = requests.post(post_url, data=json.dumps(data), headers=headers)
+		self.post("/messages", data)
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
@@ -633,6 +652,7 @@ class Server:
 		channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
 		self.pubnub.publish({
 			'channel' : channel,
+			'account' : self.username,
 			'message' : {
 				'type' : 'text',
 				'phone_number' : phone_number,
@@ -737,8 +757,26 @@ class Server:
 
 
 database_url = os.environ['SQLALCHEMY_DATABASE_URI']
-server = Server(database_url,True, True)
-login = os.environ['TEL_NUMBER']
-password = os.environ['PASS']
-password = base64.b64decode(bytes(password.encode('utf-8')))
-server.login(login, password)
+
+man_db = create_engine(database_url, echo=False)
+man_Session = sessionmaker(bind=man_db)
+man_s = man_Session()
+
+accounts = man_s.query(Account).filter_by(setup=True).all()
+if len(accounts) > 0:
+	print("Accounts : %s" % len(accounts))
+
+	for account in accounts:
+		server = Server(database_url, True, True)
+		server.login(account.phone_number, base64.b64decode(bytes(account.whatsapp_password.encode('utf-8'))), account.id)
+		# print account.whatsapp_password
+
+	# for job in jobs:		
+
+# server = Server(database_url,True, True)
+# login = os.environ['TEL_NUMBER']
+# password = os.environ['PASS']
+# password = base64.b64decode(bytes(password.encode('utf-8')))
+# server.login(login, password)
+
+
