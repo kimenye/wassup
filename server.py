@@ -146,9 +146,6 @@ class Server:
 		self.password = password
 		self.account_id = id
 
-		# print username
-		# print password
-
 		self.pubnub_channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
 		self.methodsInterface.call("auth_login", (username, self.password))
 		self.methodsInterface.call("presence_sendAvailable", ())
@@ -305,14 +302,11 @@ class Server:
 					}
 				})
 
-				headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+
 				data = { "receipt" : { "message_id" : m.id } }
-				post_url = self.url + "/receipt"
-				r = requests.post(post_url, data=json.dumps(data), headers=headers)
+				self._post("/receipt", data)
 
 				session.commit()
-
-
 
 	def onReceiptMessageSent(self, jid, messageId):
 		logging.info("Sent %s" %messageId)
@@ -324,7 +318,6 @@ class Server:
 	def onPresenceUnavailable(self, jid):
 		logging.info("JID unavilable %s" %jid)
 
-
 	def onUploadRequestDuplicate(self,_hash, url):
 		logging.info("Upload duplicate")
 		logging.info("The url is %s" %url)
@@ -335,11 +328,9 @@ class Server:
 		asset.mms_url = url
 		self.s.commit()
 
-		put_url = self.url + "/assets/%s" %asset.id
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		put_url = "/assets/%s" %asset.id		
 		data = { "asset" : { "mms_url": url } }
-
-		r = requests.patch(put_url, data=json.dumps(data), headers=headers)		
+		self._patch(put_url, data)
 
 	def utc_to_local(self,utc_dt):
 		# get integer timestamp to avoid precision lost
@@ -372,7 +363,6 @@ class Server:
 			asset.mms_url = url
 			self.s.commit()
 		
-
 	def onUploadError(self):
 		logging.info("Error with upload")
 
@@ -444,12 +434,12 @@ class Server:
 		f.close()
 		self.methodsInterface.call("message_videoSend",(target,asset.mms_url,"Video", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
 
-
 	def sendVCard(self, target):
 		card = "BEGIN:VCARD\r\n"
 		card += "VERSION:3.0\r\n"
-		card += "FN:%s\r\n" % os.environ['ACCOUNT_NAME']
-		card += "TEL;type=CELL,voice:+%s\r\n" % os.environ['TEL_NUMBER']
+		account = self.s.query(Account).get(self.account_id)
+		card += "FN:%s\r\n" % account.name
+		card += "TEL;type=CELL,voice:+%s\r\n" % account.phone_number
 		#card += "PHOTO;"
 
 		#f = open(os.environ['LOGO_PIC'], 'rb')
@@ -462,8 +452,7 @@ class Server:
 		card += "END:VCARD\r\n"
 
 		logging.info("data %s" %card)
-		self.methodsInterface.call("message_vcardSend", (target, card, os.environ['ACCOUNT_NAME']))
-
+		self.methodsInterface.call("message_vcardSend", (target, card, account.name))
 
 	def sendAudio(self, target, asset):
 		logging.info("Sending %s" %asset.mms_url)
@@ -481,7 +470,6 @@ class Server:
 		logging.info("URL %s" %asset.asset_hash)
 		self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Image", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
 
-
 	def sendMessage(self, target, text):
 		logging.info("Message %s" %text)
 		jid = target
@@ -494,10 +482,8 @@ class Server:
 		if receiptRequested and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
-		put_url = self.url  + "/groups"
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		data = { "name" : subject, "group_type" : "External", "jid" : jid }
-		r = requests.post(put_url, data=json.dumps(data), headers=headers)
+		self._post("/groups", data)
 		logging.info("Updated the group")
 
 	def onGroupAddParticipantsSuccess(self, groupJid, jid):
@@ -509,32 +495,24 @@ class Server:
 		logging.info("Removed participant %s" %jid)
 
 	def onNotificationGroupParticipantAdded(self, groupJid, jid):
-		logging.info("Group participant removed %s" %jid)
-		
-		put_url = self.url + "/groups/add_member"
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		logging.info("Group participant removed %s" %jid)		
 		data = { "groupJid" : groupJid, "phone_number": jid.split("@")[0] }
-		
-		r = requests.post(put_url, data=json.dumps(data), headers=headers)
-
+				
+		self._post("/groups/add_member", data)
 
 	def onNotificationRemovedFromGroup(self, groupJid,jid):
 		logging.info("You were removed from the group %s" %groupJid)
 
 		put_url = self.url  + "/groups/remove_member"
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
-		data = { "groupJid" : groupJid, 'phone_number': jid.split("@")[0] }
-		r = requests.post(put_url, data=json.dumps(data), headers=headers)
+		data = { "groupJid" : groupJid, 'phone_number': jid.split("@")[0] }		
+		self._post("/groups/remove_member", data)
 		logging.info("Updated the group")
-
 
 	def onGotGroupParticipants(self, groupJid, jids):
 		logging.info("Got group participants")
 
-		put_url = self.url  + "/groups/update_membership"
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		data = { "groupJid" : groupJid, "jids" : jids }
-		r = requests.post(put_url, data=json.dumps(data), headers=headers)
+		self._post("/groups/update_membership", data)
 
 	def onGroupCreateSuccess(self, groupJid):
 		logging.info("Created with id %s" %groupJid)
@@ -543,11 +521,8 @@ class Server:
 	def onGroupGotInfo(self,jid,owner,subject,subjectOwner,subjectTimestamp,creationTimestamp):
 		logging.info("Group info %s - %s" %(jid, subject))
 		
-		put_url = self.url + "/update_group"
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		data = { "name" : subject, "jid" : jid }
-
-		r = requests.post(put_url, data=json.dumps(data), headers=headers)
+		self._post("/update_group", data)
 		logging.info("Updated the group")
 
 	def onGroupCreateFail(self, errorCode):
@@ -570,12 +545,10 @@ class Server:
 		# self.methodsInterface.call("profile_setPicture", (logo_url,))
 		# self.methodsInterface.call("profile_setStatus", (status,))
         
-
 	def setStatus(self, status, message="Status message"):
 		logging.info("Setting status %s" %status)
-		post_url = self.url + "/status"
 		data = { "status" : status, "message" : message }
-		r = requests.post(post_url, data=json.dumps(data), headers=self.post_headers)
+		self._post("/status", data)
 
 	def onAuthFailed(self, username, err):
 		logging.info('Authentication failed')
@@ -589,7 +562,7 @@ class Server:
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		logging.info('Got profile picture')
-		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload"
+		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload?account=" + self.username
 		files = {'file': open(filePath, 'rb')}
 		r = requests.post(url, files=files)
 
@@ -597,7 +570,7 @@ class Server:
 		pull_pic = os.environ['PULL_STATUS_PIC']
 		if pull_pic == "true":
 			phone_number = jid.split("@")[0]
-			get_url = self.url + "/profile?phone_number=" + phone_number
+			get_url = self.url + "/profile?phone_number=" + phone_number + "&account=" + self.username
 			headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 			r = requests.get(get_url, headers=headers)
 			response = r.json()
@@ -611,12 +584,9 @@ class Server:
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
-
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json' }
+		
 		data = { "message" : { "text" : content, "group_jid" : jid, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName, "jid" : author }}
-
-		post_url = self.url + "/receive_broadcast"
-		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+		self._post("/receive_broadcast", data)
 
 		self.checkProfilePic(author)
 
@@ -631,7 +601,12 @@ class Server:
 			}
 		})
 
-	def post(self, url, data):
+	def _patch(self,url,data):
+		data.update(account = self.username)
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		r = requests.patch(self.url + url, data=json.dumps(data), headers=headers)
+
+	def _post(self, url, data):
 		data.update(account = self.username)
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		r = requests.post(self.url + url, data=json.dumps(data), headers=headers)
@@ -639,12 +614,9 @@ class Server:
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
 		logging.info('Message Received %s' %messageContent)
 		phone_number = jid.split("@")[0]
-		# headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		
 		data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName  }}
-		# post_url = self.url + "/messages"
-
-		# r = requests.post(post_url, data=json.dumps(data), headers=headers)
-		self.post("/messages", data)
+		self._post("/messages", data)
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
@@ -666,26 +638,19 @@ class Server:
 	def onLocationReceived(self, messageId, jid, name, preview, latitude, longitude, wantsReceipt, isBroadcast):
 		logging.info('Location Received')	
 		phone_number = jid.split("@")[0]
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+
 		data = { "location" : { 'latitude' : latitude, 'longitude': longitude, 'preview' : preview, 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : name } }
-
-		post_url = self.url + "/locations"
-
-		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+		self._post("/locations", data)
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
-
 
 	def onImageReceived(self, messageId, jid, preview, url, size, wantsReceipt, isBroadCast):	
 		logging.info('Image Received')	
 		phone_number = jid.split("@")[0]
 
-		# print preview
-		post_url = self.url + "/upload"
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		data = { "message" : { 'url' : url, 'message_type' : 'Image' , 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
-		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+		self._post("/upload", data)
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
@@ -702,33 +667,24 @@ class Server:
 		})
 
 		self.checkProfilePic(jid)
-
 	
-	def onVCardReceived(self, messageId, jid, name, data, wantsReceipt, isBroadcast):		
-		post_url = self.url + "/vcards"
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json' }
-		
+	def onVCardReceived(self, messageId, jid, name, data, wantsReceipt, isBroadcast):				
 		vcard = vobject.readOne( data )
 		vcard.prettyPrint()
 
-		data = { "vcard" : { 'phone_number' : jid.split("@")[0], 'whatsapp_message_id' : messageId, 'data' : vcard.serialize() }}
-
-		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+		data = { "vcard" : { 'phone_number' : jid.split("@")[0], 'whatsapp_message_id' : messageId, 'data' : vcard.serialize() }}		
+		self._post("/vcards", data)
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
-
 
 	def onAudioReceived(self, messageId, jid, url, size, wantsReceipt, isBroadcast):
 		logging.info("Audio received %s" %messageId)
 		logging.info("url: %s" %url)
 		phone_number = jid.split("@")[0]
 
-		post_url = self.url + "/upload"
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json' }
 		data = { "message" : { 'url' : url,  'message_type': 'Audio', 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
-
-		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+		self._post("/upload", data)
 		
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
@@ -738,20 +694,18 @@ class Server:
 		logging.info("From %s" %jid)
 		logging.info("url: %s" %mediaUrl)
 
-		post_url = self.url + "/upload"
 		phone_number = jid.split("@")[0]
-		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		data = { "message" : { 'url' : mediaUrl, 'message_type' : 'Video', 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
+		self._post("/upload", data)
 
 		# Send a receipt regardless of whether it was a successful upload
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 		r = requests.post(post_url, data=json.dumps(data), headers=headers)
 
-
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		logging.info('Profile picture received')
-		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload"
+		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload?account=" + self.username
 		files = {'file': open(filePath, 'rb')}
 		r = requests.post(url, files=files)
 
