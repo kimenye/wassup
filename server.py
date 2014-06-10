@@ -8,6 +8,8 @@ from Yowsup.Media.uploader import MediaUploader
 import os, json, base64, time, requests, hashlib, datetime
 import logging
 import vobject
+import thread
+from threading import Thread
 
 import calendar
 from datetime import datetime, timedelta
@@ -75,8 +77,9 @@ class Job(Base):
 		self.args = args
 		self.scheduled_time = scheduled_time
 
-class Server:
+class Server(Thread):
 	def __init__(self, url, keepAlive = False, sendReceipts = False):
+		super(Server, self).__init__()
 		self.sendReceipts = sendReceipts
 		self.keepAlive = keepAlive
 		self.db = create_engine(url, echo=False)
@@ -142,13 +145,19 @@ class Server:
 
 	def login(self, username, password, id):
 		logging.info('In Login')
+		print "Logging in %s" %username
 		self.username = username
 		self.password = password
 		self.account_id = id
-
 		self.pubnub_channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
-		self.methodsInterface.call("auth_login", (username, self.password))
+		
+		self.methodsInterface.call("auth_login", (self.username, self.password))
 		self.methodsInterface.call("presence_sendAvailable", ())
+
+		# self.run()
+		
+	def run(self):
+		
 
 		while not self.done:
 			self.seekJobs()
@@ -558,7 +567,7 @@ class Server:
 		self.setStatus(0, "Got disconnected")
 		# self.done = True
 		logging.info('About to log in again with %s and %s' %(self.username, self.password))
-		self.login(self.username, self.password, self.id)
+		self.login(self.username, self.password, self.account_id)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		logging.info('Got profile picture')
@@ -721,11 +730,9 @@ if len(accounts) > 0:
 	print("Accounts : %s" % len(accounts))
 
 	for account in accounts:
-		server = Server(database_url, True, True)
+		server = Server(database_url, True, True)		
 		server.login(account.phone_number, base64.b64decode(bytes(account.whatsapp_password.encode('utf-8'))), account.id)
-		# print account.whatsapp_password
-
-	# for job in jobs:		
+		server.start()
 
 # server = Server(database_url,True, True)
 # login = os.environ['TEL_NUMBER']
