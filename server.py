@@ -34,6 +34,7 @@ class Account(Base):
 	whatsapp_password = Column(String(255))
 	phone_number = Column(String(255))
 	setup = Column(Boolean())
+	name = Column(String(255))
 
 
 class Asset(Base):
@@ -249,7 +250,7 @@ class Server(Thread):
 				elif job.method == "sendContact":
 					jids = job.targets.split(",")
 					for jid in jids:
-						self.sendVCard(jid)
+						self.sendVCard(jid, job.args)
 					job.sent = True
 				elif job.method == "sendAudio":
 					asset = self._getAsset(job.args)
@@ -443,25 +444,34 @@ class Server(Thread):
 		f.close()
 		self.methodsInterface.call("message_videoSend",(target,asset.mms_url,"Video", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
 
-	def sendVCard(self, target):
-		card = "BEGIN:VCARD\r\n"
-		card += "VERSION:3.0\r\n"
+	def sendVCard(self, target, args):
 		account = self.s.query(Account).get(self.account_id)
-		card += "FN:%s\r\n" % account.name
-		card += "TEL;type=CELL,voice:+%s\r\n" % account.phone_number
-		#card += "PHOTO;"
 
-		#f = open(os.environ['LOGO_PIC'], 'rb')
-		#hsh = base64.b64encode(f.read())
+		card = vobject.vCard()
+		params = args.split(",")
+		family_name = params[0]
+		given_name = params[1]
+		name = family_name + " " + given_name
 
-		#card += "BASE64:"
-		#card += hsh
-		
-		#card += "\r\n"
-		card += "END:VCARD\r\n"
+		card.add('fn')
+		card.fn.value = name
 
-		logging.info("data %s" %card)
-		self.methodsInterface.call("message_vcardSend", (target, card, account.name))
+		card.add('n')
+		card.n.value = vobject.vcard.Name(family=family_name, given=given_name)
+
+		del params[0]
+		del params[0]		
+
+		for number in params:
+			tel = number.split(":")
+			num = card.add('tel')
+			num.value = tel[1]
+			num.type_param = tel[0]
+
+		logging.info("Data %s" %card.serialize())
+		self.methodsInterface.call("message_vcardSend", (target, card.serialize(), name))
+
+
 
 	def sendAudio(self, target, asset):
 		logging.info("Sending %s" %asset.mms_url)
