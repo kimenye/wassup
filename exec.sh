@@ -5,6 +5,7 @@ export TEL_NUMBER=""
 export PASS=""
 export NUMBER=""
 export LOGO="logo.png"
+export USE_REALTIME="false"
 
 cd /home/wassup
 source venv/bin/activate

@@ -143,23 +143,19 @@ class Server(Thread):
 	def onUploadFailed(self, hash):
 		print "Upload failed"
 	
-
 	def login(self, username, password, id):
 		logging.info('In Login')
 		print "Logging in %s" %username
 		self.username = username
 		self.password = password
 		self.account_id = id
+		self.use_realtime = os.environ['USE_REALTIME'] == "true"
 		self.pubnub_channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
 		
 		self.methodsInterface.call("auth_login", (self.username, self.password))
 		self.methodsInterface.call("presence_sendAvailable", ())
-
-		# self.run()
 		
 	def run(self):
-		
-
 		while not self.done:
 			self.seekJobs()
 			time.sleep(2)
@@ -288,6 +284,14 @@ class Server(Thread):
 		asset_id = args[0]
 		return self.s.query(Asset).get(asset_id)
 
+	def _sendRealtime(self, message):
+		if self.use_realtime:
+			self.pubnub.publish({
+				'channel' : self.pubnub_channel,
+				'account' : self.username,
+				'message' : message
+			})
+
 	def onReceiptMessageDelivered(self, jid, messageId):
 		logging.info("Delivered %s" %messageId)
 		logging.info("From %s" %jid)
@@ -300,21 +304,18 @@ class Server(Thread):
 			session.commit()
 
 			m = session.query(Message).get(job.message_id)
-			logging.info("Looking for message with id %s" %job.message_id)
+			logging.info("Looking for message with id to send a receipt %s" %job.message_id)
 			if m is not None:
 				m.received = True
 				m.receipt_timestamp = datetime.now()
-				self.pubnub.publish({
-					'channel' : self.pubnub_channel,
-					'message' : {
-						'type' : 'receipt',
-						'message_id' : m.id
-					}
-				})
-
-
+				
 				data = { "receipt" : { "message_id" : m.id } }
 				self._post("/receipt", data)
+
+				self._sendRealtime({
+					'type' : 'receipt',
+					'message_id': m.id
+				})
 
 				session.commit()
 
@@ -471,8 +472,6 @@ class Server(Thread):
 		logging.info("Data %s" %card.serialize())
 		self.methodsInterface.call("message_vcardSend", (target, card.serialize(), name))
 
-
-
 	def sendAudio(self, target, asset):
 		logging.info("Sending %s" %asset.mms_url)
 		logging.info("To %s" %target)
@@ -608,16 +607,11 @@ class Server(Thread):
 		self._post("/receive_broadcast", data)
 
 		self.checkProfilePic(author)
-
-		channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
-		self.pubnub.publish({
-			'channel' : channel,
-			'message' : {
-				'type' : 'text',
-				'phone_number' : jid,
-				'text' : content,
-				'name' : pushName
-			}
+		self._sendRealtime({
+			'type' : 'text',
+			'phone_number' : jid,
+			'text' : content,
+			'name' : pushName
 		})
 
 	def _patch(self,url,data):
@@ -633,23 +627,18 @@ class Server(Thread):
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
 		logging.info('Message Received %s' %messageContent)
 		phone_number = jid.split("@")[0]
+
+		if wantsReceipt and self.sendReceipts:
+			self.methodsInterface.call("message_ack", (jid, messageId))
 		
 		data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName  }}
 		self._post("/messages", data)
 
-		if wantsReceipt and self.sendReceipts:
-			self.methodsInterface.call("message_ack", (jid, messageId))
-
-		channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
-		self.pubnub.publish({
-			'channel' : channel,
-			'account' : self.username,
-			'message' : {
-				'type' : 'text',
-				'phone_number' : phone_number,
-				'text' : messageContent,
-				'name' : pushName
-			}
+		self._sendRealtime({
+			'type' : 'text',
+			'phone_number' : phone_number,
+			'text' : messageContent,
+			'name' : pushName
 		})
 		
 		self.checkProfilePic(jid)
@@ -658,11 +647,12 @@ class Server(Thread):
 		logging.info('Location Received')	
 		phone_number = jid.split("@")[0]
 
-		data = { "location" : { 'latitude' : latitude, 'longitude': longitude, 'preview' : preview, 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : name } }
-		self._post("/locations", data)
-
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
+
+		data = { "location" : { 'latitude' : latitude, 'longitude': longitude, 'preview' : preview, 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : name } }
+		self._post("/locations", data)
+		
 
 	def onImageReceived(self, messageId, jid, preview, url, size, wantsReceipt, isBroadCast):	
 		logging.info('Image Received')	
@@ -674,15 +664,21 @@ class Server(Thread):
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
-		channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
-		self.pubnub.publish({
-			'channel' : channel,
-			'message' : {
-				'type' : 'image',
-				'phone_number' : phone_number,
-				'url' : url,
-				'name' : ''
-			}
+		# channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
+		# self.pubnub.publish({
+		# 	'channel' : channel,
+		# 	'message' : {
+		# 		'type' : 'image',
+		# 		'phone_number' : phone_number,
+		# 		'url' : url,
+		# 		'name' : ''
+		# 	}
+		# })
+		self._sendRealtime({
+			'type' : 'image',
+			'phone_number' : phone_number,
+			'url' : url,
+			'name' : ''
 		})
 
 		self.checkProfilePic(jid)
