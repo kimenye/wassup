@@ -61,7 +61,7 @@ class Job(Base):
 
 	method = Column(String(255))
 	targets = Column(String(255))
-	args = Column(String(255))
+	args = Column(String())
 	sent = Column(Boolean())
 	scheduled_time = Column(DateTime())
 	simulate = Column(Boolean())
@@ -308,6 +308,7 @@ class Server(Thread):
 			if m is not None:
 				m.received = True
 				m.receipt_timestamp = datetime.now()
+				session.commit()
 				
 				data = { "receipt" : { "message_id" : m.id } }
 				self._post("/receipt", data)
@@ -317,7 +318,7 @@ class Server(Thread):
 					'message_id': m.id
 				})
 
-				session.commit()
+				
 
 	def onReceiptMessageSent(self, jid, messageId):
 		logging.info("Sent %s" %messageId)
