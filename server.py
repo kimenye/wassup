@@ -167,11 +167,13 @@ class Server(Thread):
 
 		for job in jobs:
 			if self._onSchedule(job.scheduled_time):
+				logging.info("Calling %s" %job.method)
 				if job.method == "profile_setStatus":
 					self.methodsInterface.call(job.method, (job.args,))
 					job.sent = True
 				elif job.method == "group_create":
-					self.methodsInterface.call(job.method, (job.args,))
+					res = self.methodsInterface.call(job.method, (job.args,))
+					logging.info("Result from create group %s" %res)
 					job.sent = True
 				elif job.method == "group_addParticipants":
 					params = job.args.split(",")
@@ -514,7 +516,7 @@ class Server(Thread):
 		logging.info("Removed participant %s" %jid)
 
 	def onNotificationGroupParticipantAdded(self, groupJid, jid):
-		logging.info("Group participant removed %s" %jid)		
+		logging.info("Group participant added %s" %jid)		
 		data = { "groupJid" : groupJid, "phone_number": jid.split("@")[0] }
 				
 		self._post("/groups/add_member", data)
