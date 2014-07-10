@@ -173,7 +173,9 @@ class Server(Thread):
 					job.sent = True
 				elif job.method == "group_create":
 					res = self.methodsInterface.call(job.method, (job.args,))
-					logging.info("Result from create group %s" %res)
+					job.sent = True
+				elif job.method == "group_end":
+					res = self.methodsInterface.call(job.method, (job.args,))
 					job.sent = True
 				elif job.method == "group_addParticipants":
 					params = job.args.split(",")
