@@ -43,7 +43,7 @@ class Asset(Base):
 	__tablename__ = 'assets'
 	id = Column(Integer, primary_key=True)
 	name = Column(String(255))
-	asset_hash = Column(String(255))
+	asset_hash = Column(String())
 	file_file_name = Column(String(255))
 	video_file_name = Column(String(255))
 	video_file_size = Column(String(255))
@@ -72,6 +72,9 @@ class Job(Base):
 	receipt_timestamp = Column(DateTime())
 	message_id = Column(Integer)
 	account_id = Column(Integer)
+	runs = Column(Integer)
+	next_job_id = Column(Integer)
+	asset_id = Column(Integer)
 
 	def __init__(self, method, targets, sent, args, scheduled_time):
 		self.method = method
@@ -170,6 +173,7 @@ class Server(Thread):
 		for job in jobs:
 			if self._onSchedule(job.scheduled_time):
 				logging.info("Calling %s" %job.method)
+				job.runs += 1
 				if job.method == "profile_setStatus":
 					self.methodsInterface.call(job.method, (job.args,))
 					job.sent = True
@@ -366,7 +370,7 @@ class Server(Thread):
 
 		put_url = "/assets/%s" %asset.id		
 		data = { "asset" : { "mms_url": url } }
-		self._patch(put_url, data)
+		self._patch(put_url, data)		
 
 	def utc_to_local(self,utc_dt):
 		# get integer timestamp to avoid precision lost
@@ -389,6 +393,10 @@ class Server(Thread):
 		logging.info("To %s" %self.username)
 
 		MU = MediaUploader(self.username + "@s.whatsapp.net", self.username + "@s.whatsapp.net", self.onUploadSucccess, self.onUploadError, self.onUploadProgress)
+		
+		logging.info("Path %s" %path)
+		logging.info("Url %s" %url)
+		
 		MU.upload(path, url, asset.id)
 
 	def onUploadSucccess(self, url, _id):
@@ -397,6 +405,22 @@ class Server(Thread):
 		if _id is not None:
 			asset = self.s.query(Asset).get(_id)
 			asset.mms_url = url
+
+			# check if there is a pending job for this asset
+			upload_jobs = self.s.query(Job).filter_by(asset_id = asset.id).all()
+			logging.info("Found %s jobs tied to this asset" %len(upload_jobs))
+			for job in upload_jobs:
+				logging.info("Found job with sent %s" %job.sent)
+				if job.next_job_id is not None:
+					next_job = self.s.query(Job).get(job.next_job_id)
+
+					logging.info("Next job %s" %next_job.id)
+					logging.info("Next job sent? %s" %next_job.sent)
+					logging.info("Next job runss? %s" %next_job.runs)
+					if next_job.method == "sendImage" and next_job.sent == True and next_job.runs == 0:
+						next_job.sent = False
+
+
 			self.s.commit()
 		
 	def onUploadError(self):
@@ -442,7 +466,7 @@ class Server(Thread):
 
 	def getImageFile(self, asset):
 		if asset.asset_type == "Image":
-			path = "_%s"%asset.id + asset.file_file_name
+			path = "_%s"%asset.id + asset.name
 			file_name = "tmp/%s" %path
 			return file_name
 		elif asset.asset_type == "Video":
@@ -456,7 +480,7 @@ class Server(Thread):
 
 	def getImageThumbnailFile(self, asset):
 		if asset.asset_type == "Image":
-			path = "_%s"%asset.id + "_thumb_" + asset.file_file_name
+			path = "_%s"%asset.id + "_thumb_" + asset.name
 			file_name = "tmp/%s" %path
 			return file_name		
 		else:

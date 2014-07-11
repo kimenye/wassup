@@ -31,7 +31,9 @@ class MediaUploader(WARequest):
         
         
         try:
+            self._d(sourcePath)
             filename = os.path.basename(sourcePath)
+            self._d(filename)
             filetype = mimetypes.guess_type(filename)[0]
             filesize = os.path.getsize(sourcePath)
     
