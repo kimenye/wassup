@@ -621,7 +621,7 @@ class Server(Thread):
 		self._post("/status", data)
 
 	def onAuthFailed(self, username, err):
-		logging.info("Authentication failed for %s", %username)
+		logging.info("Authentication failed for %s" %username)
 		
 	def onDisconnected(self, reason):
 		logging.info('Disconnected')
