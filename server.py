@@ -485,6 +485,9 @@ class Server(Thread):
 		card.add('n')
 		card.n.value = vobject.vcard.Name(family=family_name, given=given_name)
 
+		logging.info("First name %s" %family_name)
+		logging.info("Last name %s" %given_name)
+
 
 		# http://localhost:3000/api/v1/base/status?token=07a19a8b8ff38d9d8b3613901a9a61e9
 		api_url = self.url  + "/api/v1/base/status?token=%s" %account.auth_token
