@@ -10,6 +10,7 @@ import logging
 import vobject
 import thread
 from threading import Thread
+# from PIL import Image
 
 import calendar
 from datetime import datetime, timedelta
@@ -32,6 +33,7 @@ class Account(Base):
 	__tablename__ = 'accounts'
 	id = Column(Integer, primary_key=True)
 	whatsapp_password = Column(String(255))
+	auth_token = Column(String(255))
 	phone_number = Column(String(255))
 	setup = Column(Boolean())
 	name = Column(String(255))
@@ -83,7 +85,7 @@ class Server(Thread):
 		super(Server, self).__init__()
 		self.sendReceipts = sendReceipts
 		self.keepAlive = keepAlive
-		self.db = create_engine(url, echo=False)
+		self.db = create_engine(url, echo=False, pool_size=10, pool_timeout=60)
 
 		self.Session = sessionmaker(bind=self.db)
 		self.s = self.Session()
@@ -276,9 +278,27 @@ class Server(Thread):
 					job.sent = True
 				elif job.method == "typing_send":
 					job.sent = True
+				elif job.method == "setProfilePicture":
+					job.sent = True
+					self.setProfilePicture(job)
 
 		
 		self.s.commit()	
+
+	def setProfilePicture(self, job):
+		logging.info("About to set the profile picture")
+		
+		# first disconnect the server
+		account = self.s.query(Account).get(self.account_id)
+		account.setup = False
+		self.s.commit()
+
+		logging.info("About to sleep for 5 seconds")
+		time.sleep(5)
+
+		logging.info("Finished setting of the profile")
+
+
 
 	def _onSchedule(self,scheduled_time):
 		return (scheduled_time is None or datetime.now() > self.utc_to_local(scheduled_time))
@@ -465,6 +485,14 @@ class Server(Thread):
 		card.add('n')
 		card.n.value = vobject.vcard.Name(family=family_name, given=given_name)
 
+
+		# http://localhost:3000/api/v1/base/status?token=07a19a8b8ff38d9d8b3613901a9a61e9
+		api_url = self.url  + "/api/v1/base/status?token=%s" %account.auth_token
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		r = requests.get(api_url, headers=headers)
+		response = r.json()
+
+		
 		del params[0]
 		del params[0]		
 
@@ -473,6 +501,22 @@ class Server(Thread):
 			num = card.add('tel')
 			num.value = tel[1]
 			num.type_param = tel[0]
+
+		logging.info("Response is %s" %response)
+		if response['profile_pic'] != self.url + '/blank-profile.png':			
+			tb = open('tmp/profile_thumb.jpg', 'wb')
+			tb.write(requests.get(response['profile_pic']).content)
+			tb.close()
+
+			f = open('tmp/profile_thumb.jpg', 'r')
+			stream = base64.b64encode(f.read())
+			f.close()
+
+			card.add('photo')
+			card.photo.value = stream
+			card.photo.type_param = "JPEG"
+			# card.photo.encoding_param = "b"
+
 
 		logging.info("Data %s" %card.serialize())
 		self.methodsInterface.call("message_vcardSend", (target, card.serialize(), name))

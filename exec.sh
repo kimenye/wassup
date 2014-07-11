@@ -6,6 +6,7 @@ export PASS=""
 export NUMBER=""
 export LOGO="logo.png"
 export USE_REALTIME="false"
+export API_URL=""
 
 cd /home/wassup
 source venv/bin/activate
