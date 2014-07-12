@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, desc
 from sqlalchemy.orm import sessionmaker
 from Yowsup.connectionmanager import YowsupConnectionManager
 from Yowsup.Common.utilities import Utilities
@@ -363,10 +363,12 @@ class Server(Thread):
 		logging.info("The url is %s" %url)
 		logging.info("The hash is %s" %_hash)	
 
-		asset = self.s.query(Asset).filter_by(asset_hash=_hash).first()
+		asset = self.s.query(Asset).filter_by(asset_hash=_hash).order_by(desc(Asset.id)).first()
 		logging.info("Asset id %s" %asset.mms_url)
 		asset.mms_url = url
 		self.s.commit()
+
+		self._sendAsset(asset.id)
 
 		put_url = "/assets/%s" %asset.id		
 		data = { "asset" : { "mms_url": url } }
@@ -399,6 +401,22 @@ class Server(Thread):
 		
 		MU.upload(path, url, asset.id)
 
+	def _sendAsset(self, asset_id):
+		logging.info("Sending an uploaded asset %s" %asset_id)
+		upload_jobs = self.s.query(Job).filter_by(asset_id = asset_id).all()
+		logging.info("Found %s jobs tied to this asset" %len(upload_jobs))
+		for job in upload_jobs:
+			logging.info("Found job with sent %s" %job.sent)
+			if job.next_job_id is not None:
+				next_job = self.s.query(Job).get(job.next_job_id)
+
+				logging.info("Next job %s" %next_job.id)
+				logging.info("Next job sent? %s" %next_job.sent)
+				logging.info("Next job runs? %s" %next_job.runs)
+				if next_job.method == "sendImage" and next_job.sent == True and next_job.runs == 0:
+					next_job.sent = False
+		self.s.commit()
+
 	def onUploadSucccess(self, url, _id):
 		logging.info("Upload success!")
 		logging.info("Url %s" %url)
@@ -406,22 +424,8 @@ class Server(Thread):
 			asset = self.s.query(Asset).get(_id)
 			asset.mms_url = url
 
-			# check if there is a pending job for this asset
-			upload_jobs = self.s.query(Job).filter_by(asset_id = asset.id).all()
-			logging.info("Found %s jobs tied to this asset" %len(upload_jobs))
-			for job in upload_jobs:
-				logging.info("Found job with sent %s" %job.sent)
-				if job.next_job_id is not None:
-					next_job = self.s.query(Job).get(job.next_job_id)
-
-					logging.info("Next job %s" %next_job.id)
-					logging.info("Next job sent? %s" %next_job.sent)
-					logging.info("Next job runss? %s" %next_job.runs)
-					if next_job.method == "sendImage" and next_job.sent == True and next_job.runs == 0:
-						next_job.sent = False
-
-
 			self.s.commit()
+			self._sendAsset(asset.id)
 		
 	def onUploadError(self):
 		logging.info("Error with upload")
@@ -512,8 +516,6 @@ class Server(Thread):
 		logging.info("First name %s" %family_name)
 		logging.info("Last name %s" %given_name)
 
-
-		# http://localhost:3000/api/v1/base/status?token=07a19a8b8ff38d9d8b3613901a9a61e9
 		api_url = self.url  + "/api/v1/base/status?token=%s" %account.auth_token
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 		r = requests.get(api_url, headers=headers)
