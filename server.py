@@ -88,7 +88,7 @@ class Server(Thread):
 		super(Server, self).__init__()
 		self.sendReceipts = sendReceipts
 		self.keepAlive = keepAlive
-		self.db = create_engine(url, echo=False, pool_size=20, pool_timeout=600,pool_recycle=300)
+		self.db = create_engine(url, echo=False, pool_size=10, pool_timeout=600,pool_recycle=300)
 
 		self.Session = sessionmaker(bind=self.db)
 		self.s = self.Session()
