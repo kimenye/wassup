@@ -88,7 +88,7 @@ class Server(Thread):
 		super(Server, self).__init__()
 		self.sendReceipts = sendReceipts
 		self.keepAlive = keepAlive
-		self.db = create_engine(url, echo=False, pool_size=10, pool_timeout=60)
+		self.db = create_engine(url, echo=False, pool_size=20, pool_timeout=600,pool_recycle=300)
 
 		self.Session = sessionmaker(bind=self.db)
 		self.s = self.Session()
@@ -248,10 +248,8 @@ class Server(Thread):
 						self.requestMediaUrl(url, asset, None)
 					job.sent = True
 				elif job.method == "sendImage":
-					asset = self._getAsset(job.args)
-					jids = job.targets.split(",")
-					for jid in jids:
-						self.sendImage(jid + "@s.whatsapp.net", asset)
+					asset = self._getAsset(job.args)					
+					job.whatsapp_message_id = self.sendImage(job.targets + "@s.whatsapp.net", asset)
 					job.sent = True
 				elif job.method == "sendContact":
 					jids = job.targets.split(",")
@@ -564,7 +562,9 @@ class Server(Thread):
 		logging.info("Target %s" %target)
 		logging.info("URL %s" %asset.mms_url)
 		logging.info("URL %s" %asset.asset_hash)
-		self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Image", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
+		rst = self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Image", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
+		logging.info("Result of send image %s" %rst)
+		return rst
 
 	def sendMessage(self, target, text):
 		logging.info("Message %s" %text)
