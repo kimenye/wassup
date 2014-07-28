@@ -71,6 +71,7 @@ class Job(Base):
 	received = Column(String(255))
 	receipt_timestamp = Column(DateTime())
 	message_id = Column(Integer)
+	broadcast_part_id = Column(Integer)
 	account_id = Column(Integer)
 	runs = Column(Integer)
 	next_job_id = Column(Integer)
@@ -82,6 +83,11 @@ class Job(Base):
 		self.sent = sent
 		self.args = args
 		self.scheduled_time = scheduled_time
+
+class BroadcastPart(Base):
+	__tablename__ = 'broadcast_parts'
+	id = Column(Integer, primary_key=True)
+	whatsapp_id = Column(String(255))
 
 class Server(Thread):
 	def __init__(self, url, keepAlive = False, sendReceipts = False):
@@ -210,7 +216,7 @@ class Server(Thread):
 					targets = []
 					for jid in jids:
 						targets.append("%s@s.whatsapp.net" %jid)
-					self.methodsInterface.call("message_broadcast", (targets, job.args, ))
+					job.whatsapp_message_id = self.methodsInterface.call("message_broadcast", (targets, job.args, ))
 
 					job.sent = True
 				elif job.method == "broadcast_Image":
@@ -329,20 +335,24 @@ class Server(Thread):
 			job.received = True
 			session.commit()
 
-			m = session.query(Message).get(job.message_id)
-			logging.info("Looking for message with id to send a receipt %s" %job.message_id)
-			if m is not None:
-				m.received = True
-				m.receipt_timestamp = datetime.now()
-				session.commit()
-				
-				data = { "receipt" : { "message_id" : m.id } }
-				self._post("/receipt", data)
+			if job.method != "broadcast_Text":
+				m = session.query(Message).get(job.message_id)
+				logging.info("Looking for message with id to send a receipt %s" %job.message_id)
+				if m is not None:
+					m.received = True
+					m.receipt_timestamp = datetime.now()
+					session.commit()
+					
+					data = { "receipt" : { "message_id" : m.id } }
+					self._post("/receipt", data)
 
-				self._sendRealtime({
-					'type' : 'receipt',
-					'message_id': m.id
-				})
+					self._sendRealtime({
+						'type' : 'receipt',
+						'message_id': m.id
+					})
+			else:
+				data = { "receipt" : { "message_id" : messageId, "phone_number" : jid.split("@")[0] } }
+				self._post("/broadcast_receipt", data)				
 
 				
 
