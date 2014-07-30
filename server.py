@@ -36,6 +36,7 @@ class Account(Base):
 	auth_token = Column(String(255))
 	phone_number = Column(String(255))
 	setup = Column(Boolean())
+	off_line = Column(Boolean())
 	name = Column(String(255))
 
 
@@ -144,6 +145,7 @@ class Server(Thread):
 		# self.signalsInterface.registerListener("media_uploadRequestFailed", self.onUploadRequestFailed)
 		self.signalsInterface.registerListener("media_uploadRequestDuplicate", self.onUploadRequestDuplicate)
 		self.signalsInterface.registerListener("presence_available", self.onPresenceAvailable)
+		self.signalsInterface.registerListener("presence_unavailable", self.onPresenceUnavailable)
 		
 		self.cm = connectionManager
 		self.url = os.environ['URL']
@@ -289,6 +291,24 @@ class Server(Thread):
 				elif job.method == "setProfilePicture":
 					job.sent = True
 					self.setProfilePicture(job)
+				elif job.method == "disconnect":
+					account = self.s.query(Account).get(self.account_id)
+					account.setup = False
+					account.off_line = True
+
+					self.cm.disconnect("Disconneting for other jobs")
+
+					job.sent = True
+					self.s.commit()
+					wait = account.off_line
+
+					while wait:
+						logging.info("Waiting for resume from another job")
+						time.sleep(10)
+						account = self.s.query(Account).get(self.account_id)
+						wait = account.off_line		
+
+									
 
 		
 		self.s.commit()	
@@ -363,8 +383,13 @@ class Server(Thread):
 	def onPresenceAvailable(self, jid):
 		logging.info("JID available %s" %jid)
 
-	def onPresenceUnavailable(self, jid):
+	def onPresenceUnavailable(self, jid, last):
 		logging.info("JID unavilable %s" %jid)
+		logging.info("Last seen is %s" %last)
+
+		if last == "deny":
+			logging.info("this number %s has blocked you", %jid)
+
 
 	def onUploadRequestDuplicate(self,_hash, url):
 		logging.info("Upload duplicate")
@@ -663,8 +688,10 @@ class Server(Thread):
 		logging.info('Disconnected')
 		self.setStatus(0, "Got disconnected")
 		# self.done = True
-		logging.info('About to log in again with %s and %s' %(self.username, self.password))
-		self.login(self.username, self.password, self.account_id)
+		account = self.s.query(Account).get(self.account_id)
+		if account.setup == True:
+			logging.info('About to log in again with %s and %s' %(self.username, self.password))
+			self.login(self.username, self.password, self.account_id)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		logging.info('Got profile picture')

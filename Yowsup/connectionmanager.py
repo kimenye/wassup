@@ -864,11 +864,12 @@ class ReaderThread(threading.Thread):
 					elif ProtocolTreeNode.tagEquals(node,"presence"):
 						xmlns = node.getAttributeValue("xmlns")
 						jid = node.getAttributeValue("from")						
+						last = node.getAttributeValue("last")
 
 						if (xmlns is None or xmlns == "urn:xmpp") and jid is not None:
 							presenceType = node.getAttributeValue("type")
 							if presenceType == "unavailable":
-								self.signalInterface.send("presence_unavailable", (jid,))
+								self.signalInterface.send("presence_unavailable", (jid,last,))
 							elif presenceType is None or presenceType == "available":
 								self.signalInterface.send("presence_available", (jid,))
 
