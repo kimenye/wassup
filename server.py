@@ -18,7 +18,7 @@ from pubnub import Pubnub
 
 Base = declarative_base()
 logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
-
+# logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
 class Message(Base):
 	__tablename__ = 'messages'
@@ -179,7 +179,12 @@ class Server(Thread):
 			logging.info("Pending Jobs %s" % len(jobs))
 
 		for job in jobs:
-			if self._onSchedule(job.scheduled_time):
+			
+			logging.info("About to look for the account")
+			acc = self.s.query(Account).get(self.account_id)
+			logging.info("Found the account %s" %acc.off_line)
+
+			if self._onSchedule(job.scheduled_time) and acc.off_line == False:
 				logging.info("Calling %s" %job.method)
 				job.runs += 1
 				if job.method == "profile_setStatus":
@@ -293,24 +298,19 @@ class Server(Thread):
 					self.setProfilePicture(job)
 				elif job.method == "disconnect":
 					account = self.s.query(Account).get(self.account_id)
-					account.setup = False
 					account.off_line = True
 
 					self.cm.disconnect("Disconneting for other jobs")
 
 					job.sent = True
-					self.s.commit()
-					wait = account.off_line
+			elif acc.off_line == True:
+				reconnect = self.s.query(Job).filter_by(sent=False, account_id=self.account_id, method="reconnect").scalar() 									
+				if reconnect is not None:
+					self.methodsInterface.call("auth_login", (self.username, self.password))
+					self.methodsInterface.call("presence_sendAvailable", ())
+					reconnect.sent = True
+					# self.s.commit()
 
-					while wait:
-						logging.info("Waiting for resume from another job")
-						time.sleep(10)
-						account = self.s.query(Account).get(self.account_id)
-						wait = account.off_line		
-
-									
-
-		
 		self.s.commit()	
 
 	def setProfilePicture(self, job):
@@ -388,7 +388,7 @@ class Server(Thread):
 		logging.info("Last seen is %s" %last)
 
 		if last == "deny":
-			logging.info("this number %s has blocked you", %jid)
+			logging.info("this number %s has blocked you" %jid)
 
 
 	def onUploadRequestDuplicate(self,_hash, url):
@@ -689,7 +689,7 @@ class Server(Thread):
 		self.setStatus(0, "Got disconnected")
 		# self.done = True
 		account = self.s.query(Account).get(self.account_id)
-		if account.setup == True:
+		if account.off_line == False:
 			logging.info('About to log in again with %s and %s' %(self.username, self.password))
 			self.login(self.username, self.password, self.account_id)
 
@@ -846,7 +846,7 @@ man_db = create_engine(database_url, echo=False)
 man_Session = sessionmaker(bind=man_db)
 man_s = man_Session()
 
-accounts = man_s.query(Account).filter_by(setup=True).all()
+accounts = man_s.query(Account).filter_by(setup=True, off_line=False).all()
 if len(accounts) > 0:
 	print("Accounts : %s" % len(accounts))
 
