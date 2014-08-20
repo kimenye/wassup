@@ -10,7 +10,6 @@ import logging
 import vobject
 import thread
 from threading import Thread
-# from PIL import Image
 
 import calendar
 from datetime import datetime, timedelta
@@ -99,6 +98,7 @@ class Server(Thread):
 
 		self.Session = sessionmaker(bind=self.db)
 		self.s = self.Session()
+		self.job = None
 
 		self.pubnub = Pubnub(os.environ['PUB_KEY'], os.environ['SUB_KEY'], None, False)
 
@@ -118,9 +118,7 @@ class Server(Thread):
 		self.signalsInterface.registerListener("vcard_received", self.onVCardReceived)
 		self.signalsInterface.registerListener("location_received", self.onLocationReceived)
 		self.signalsInterface.registerListener("receipt_messageSent", self.onReceiptMessageSent)
-		self.signalsInterface.registerListener("receipt_messageDelivered", self.onReceiptMessageDelivered)
-
-		
+		self.signalsInterface.registerListener("receipt_messageDelivered", self.onReceiptMessageDelivered)		
 		
 		self.signalsInterface.registerListener("auth_success", self.onAuthSuccess)
 		self.signalsInterface.registerListener("auth_fail", self.onAuthFailed)
@@ -138,8 +136,6 @@ class Server(Thread):
 		self.signalsInterface.registerListener("notification_removedFromGroup", self.onNotificationRemovedFromGroup)
 		self.signalsInterface.registerListener("notification_groupParticipantAdded", self.onNotificationGroupParticipantAdded)
 		self.signalsInterface.registerListener("group_gotParticipants", self.onGotGroupParticipants)
-		
-
 
 		self.signalsInterface.registerListener("media_uploadRequestSuccess", self.onUploadRequestSuccess)
 		# self.signalsInterface.registerListener("media_uploadRequestFailed", self.onUploadRequestFailed)
@@ -157,8 +153,7 @@ class Server(Thread):
 		print "Upload failed"
 	
 	def login(self, username, password, id):
-		logging.info('In Login')
-		print "Logging in %s" %username
+		logging.info("In Login : %s" %username)
 		self.username = username
 		self.password = password
 		self.account_id = id
@@ -178,18 +173,32 @@ class Server(Thread):
 		if len(jobs) > 0:
 			logging.info("Pending Jobs %s" % len(jobs))
 
-		for job in jobs:
-			
-			logging.info("About to look for the account")
-			acc = self.s.query(Account).get(self.account_id)
-			logging.info("Found the account %s" %acc.off_line)
-
+		acc = self._getAccount()
+		logging.info("Found the account %s" %acc.off_line)
+		
+		for job in jobs:									
 			if self._onSchedule(job.scheduled_time) and acc.off_line == False:
 				logging.info("Calling %s" %job.method)
 				job.runs += 1
 				if job.method == "profile_setStatus":
-					self.methodsInterface.call(job.method, (job.args,))
+					# self.methodsInterface.call(job.method, (job.args,))
 					job.sent = True
+					self.job = job
+
+					account = self.s.query(Account).get(self.account_id)
+					account.off_line = True					
+					self.s.commit()
+					
+					self.cm.disconnect("Disconnecting for other jobs")
+				elif job.method == "broadcast_Image":
+					job.sent = True
+					self.job = job
+
+					account = self.s.query(Account).get(self.account_id)
+					account.off_line = True
+					self.s.commit()
+					self.cm.disconnect("Disconnecting for broadcast image job")
+
 				elif job.method == "group_create":
 					res = self.methodsInterface.call(job.method, (job.args,))
 					job.sent = True
@@ -225,15 +234,6 @@ class Server(Thread):
 						targets.append("%s@s.whatsapp.net" %jid)
 					job.whatsapp_message_id = self.methodsInterface.call("message_broadcast", (targets, job.args, ))
 
-					job.sent = True
-				elif job.method == "broadcast_Image":
-					args = job.args.split(",")
-					asset_id = args[0]
-					asset = self.s.query(Asset).get(asset_id)
-					jids = job.targets.split(",")
-					for jid in jids:
-						self.sendImage(jid + "@s.whatsapp.net", asset)
-						time.sleep(1)
 					job.sent = True
 				elif job.method == "uploadMedia":
 					args = job.args.split(",")
@@ -300,16 +300,19 @@ class Server(Thread):
 					account = self.s.query(Account).get(self.account_id)
 					account.off_line = True
 
-					self.cm.disconnect("Disconneting for other jobs")
+					self.cm.disconnect("Disconnecting for other jobs")
 
 					job.sent = True
-			elif acc.off_line == True:
-				reconnect = self.s.query(Job).filter_by(sent=False, account_id=self.account_id, method="reconnect").scalar() 									
-				if reconnect is not None:
-					self.methodsInterface.call("auth_login", (self.username, self.password))
-					self.methodsInterface.call("presence_sendAvailable", ())
-					reconnect.sent = True
-					# self.s.commit()
+		if acc.off_line == True and self.job == None:
+			logging.info("Time to reconnect")
+			
+			acc = self._getAccount()						
+			acc.off_line = False
+			self.s.commit()
+
+			self.methodsInterface.call("auth_login", (self.username, self.password))
+			self.methodsInterface.call("presence_sendAvailable", ())
+			
 
 		self.s.commit()	
 
@@ -327,9 +330,11 @@ class Server(Thread):
 		logging.info("Finished setting of the profile")
 
 
-
 	def _onSchedule(self,scheduled_time):
 		return (scheduled_time is None or datetime.now() > self.utc_to_local(scheduled_time))
+
+	def _getAccount(self):
+		return self.s.query(Account).get(self.account_id)
 
 	def _getAsset(self, args):
 		args = args.split(",")
@@ -355,7 +360,7 @@ class Server(Thread):
 			job.received = True
 			session.commit()
 
-			if job.method != "broadcast_Text":
+			if job.method == "sendMessage":
 				m = session.query(Message).get(job.message_id)
 				logging.info("Looking for message with id to send a receipt %s" %job.message_id)
 				if m is not None:
@@ -666,15 +671,6 @@ class Server(Thread):
 		logging.info("We are authenticated")
 		self.methodsInterface.call("ready")
 		self.setStatus(1, "Authenticated")
-
-		# logo_url = os.environ['LOGO_PIC']
-		# status = os.environ['STATUS_MSG']
-
-		# logging.info("The pic is %s" %logo_url)
-		# logging.info("Status MSG %s" %status)
-
-		# self.methodsInterface.call("profile_setPicture", (logo_url,))
-		# self.methodsInterface.call("profile_setStatus", (status,))
         
 	def setStatus(self, status, message="Status message"):
 		logging.info("Setting status %s" %status)
@@ -692,6 +688,28 @@ class Server(Thread):
 		if account.off_line == False:
 			logging.info('About to log in again with %s and %s' %(self.username, self.password))
 			self.login(self.username, self.password, self.account_id)
+		elif account.off_line == True and self.job is not None:			
+			# call the current job
+			job = self.job
+			url = os.environ['API_URL']
+			headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+			if job.method == "profile_setStatus":				
+				args = { "nickname" : account.name, "method" : "profile_setStatus", "password" : account.whatsapp_password, "status" : job.args, "jid" : account.phone_number }
+				r = requests.post(url, data=args)
+				print r.text
+			elif job.method == "broadcast_Image":
+				image_url = job.args.split(",")[1]
+				full_url = os.environ['URL'] + image_url
+				print full_url				
+				args = { "nickname" : account.name, "targets" : job.targets, "method" : job.method , "password" : account.whatsapp_password , "image" : full_url, "jid" : account.phone_number, "externalId" : job.id }
+
+				r = requests.post(url, data=args)
+				print r.text
+
+			self.job = None
+			# account.off_line = False
+			self.s.commit()
+
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		logging.info('Got profile picture')
