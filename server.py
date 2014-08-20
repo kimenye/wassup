@@ -153,9 +153,7 @@ class Server(Thread):
 	def onUploadFailed(self, hash):
 		print "Upload failed"
 	
-	def login(self, username, password, id):
-		# logging.info("In Login : %s" %username)
-
+	def login(self, username, password, id):		
 		self.username = username
 		self.password = password
 		self.account_id = id
@@ -174,14 +172,14 @@ class Server(Thread):
 	def seekJobs(self):
 		jobs = self.s.query(Job).filter_by(sent=False, account_id=self.account_id).all()
 		if len(jobs) > 0:
-			logging.info("Pending Jobs %s" % len(jobs))
+			self._d("Pending Jobs %s" % len(jobs))
 
 		acc = self._getAccount()
-		logging.info("Found the account. Offline status is %s" %acc.off_line)
+		self._d("Offline : %s" %acc.off_line)
 		
 		for job in jobs:									
 			if self._onSchedule(job.scheduled_time) and acc.off_line == False:
-				logging.info("Calling %s" %job.method)
+				self._d("Calling %s" %job.method)
 				job.runs += 1
 
 				if job.off_line == True:
@@ -235,11 +233,11 @@ class Server(Thread):
 						asset_id = args[0]
 						url = args[1]
 						preview = args[2]
-						logging.info("Asset Id: %s" %args[0])
+						self._d("Asset Id: %s" %args[0])
 						asset = self.s.query(Asset).get(asset_id)				
-						logging.info("File name: %s" %asset.file_file_name)
-						logging.info("Video name: %s" %asset.video_file_name)
-						logging.info("Url: %s" %asset.mms_url)
+						self._d("File name: %s" %asset.file_file_name)
+						self._d("Video name: %s" %asset.video_file_name)
+						self._d("Url: %s" %asset.mms_url)
 
 						if asset.mms_url == None:
 							self.requestMediaUrl(url, asset, preview)
@@ -248,9 +246,9 @@ class Server(Thread):
 						args = job.args.split(",")
 						asset_id = args[0]
 						url = args[1]
-						logging.info("Asset Id: %s" %args[0])
+						self._d("Asset Id: %s" %args[0])
 						asset = self.s.query(Asset).get(asset_id)
-						logging.info("File name: %s" %asset.audio_file_name)
+						self._d("File name: %s" %asset.audio_file_name)
 
 						if asset.mms_url == None:
 							self.requestMediaUrl(url, asset, None)
@@ -287,19 +285,9 @@ class Server(Thread):
 						self.sendVideo(job.targets, asset)
 						job.sent = True
 					elif job.method == "typing_send":
-						job.sent = True
-					elif job.method == "setProfilePicture":
-						job.sent = True
-						self.setProfilePicture(job)
-					elif job.method == "disconnect":
-						account = self.s.query(Account).get(self.account_id)
-						account.off_line = True
-
-						self.cm.disconnect("Disconnecting for other jobs")
-
-						job.sent = True
+						job.sent = True					
 		if acc.off_line == True and self.job == None:
-			logging.info("Time to reconnect")
+			self._d("Reconnecting")
 			
 			acc = self._getAccount()						
 			acc.off_line = False
@@ -309,20 +297,7 @@ class Server(Thread):
 			self.methodsInterface.call("presence_sendAvailable", ())
 			
 
-		self.s.commit()	
-
-	def setProfilePicture(self, job):
-		logging.info("About to set the profile picture")
-		
-		# first disconnect the server
-		account = self.s.query(Account).get(self.account_id)
-		account.setup = False
-		self.s.commit()
-
-		logging.info("About to sleep for 5 seconds")
-		time.sleep(5)
-
-		logging.info("Finished setting of the profile")
+		self.s.commit()		
 
 	def _d(self, message):
 		logging.info("%s - %s" %(self.username, message))
@@ -347,8 +322,8 @@ class Server(Thread):
 			})
 
 	def onReceiptMessageDelivered(self, jid, messageId):
-		logging.info("Delivered %s" %messageId)
-		logging.info("From %s" %jid)
+		self._d("Delivered %s" %messageId)
+		self._d("From %s" %jid)
 		# self.s.query(Job).filter_by(sent=False).all()
 
 		session = self.Session()
@@ -359,7 +334,7 @@ class Server(Thread):
 
 			if job.method == "sendMessage":
 				m = session.query(Message).get(job.message_id)
-				logging.info("Looking for message with id to send a receipt %s" %job.message_id)
+				self._d("Looking for message with id to send a receipt %s" %job.message_id)
 				if m is not None:
 					m.received = True
 					m.receipt_timestamp = datetime.now()
@@ -379,27 +354,27 @@ class Server(Thread):
 				
 
 	def onReceiptMessageSent(self, jid, messageId):
-		logging.info("Sent %s" %messageId)
-		logging.info("To %s" %jid)
+		self._d("Sent %s" %messageId)
+		self._d("To %s" %jid)
 
 	def onPresenceAvailable(self, jid):
-		logging.info("JID available %s" %jid)
+		self._d("JID available %s" %jid)
 
 	def onPresenceUnavailable(self, jid, last):
-		logging.info("JID unavilable %s" %jid)
-		logging.info("Last seen is %s" %last)
+		self._d("JID unavilable %s" %jid)
+		self._d("Last seen is %s" %last)
 
 		if last == "deny":
-			logging.info("this number %s has blocked you" %jid)
+			self._d("this number %s has blocked you" %jid)
 
 
 	def onUploadRequestDuplicate(self,_hash, url):
-		logging.info("Upload duplicate")
-		logging.info("The url is %s" %url)
-		logging.info("The hash is %s" %_hash)	
+		self._d("Upload duplicate")
+		self._d("The url is %s" %url)
+		self._d("The hash is %s" %_hash)	
 
 		asset = self.s.query(Asset).filter_by(asset_hash=_hash).order_by(desc(Asset.id)).first()
-		logging.info("Asset id %s" %asset.mms_url)
+		self._d("Asset id %s" %asset.mms_url)
 		asset.mms_url = url
 		self.s.commit()
 
@@ -417,44 +392,44 @@ class Server(Thread):
 		return local_dt.replace(microsecond=utc_dt.microsecond)
 
 	def onUploadRequestSuccess(self, _hash, url, removeFrom):
-		logging.info("Upload Request success")
-		logging.info("The url is %s" %url)
-		logging.info("The hash is %s" %_hash)
+		self._d("Upload Request success")
+		self._d("The url is %s" %url)
+		self._d("The hash is %s" %_hash)
 		asset = self.s.query(Asset).filter_by(asset_hash=_hash).first()
 		asset.mms_url = url
 		self.s.commit()
 
 		path = self.getImageFile(asset)
 
-		logging.info("To upload %s" %path)
-		logging.info("To %s" %self.username)
+		self._d("To upload %s" %path)
+		self._d("To %s" %self.username)
 
 		MU = MediaUploader(self.username + "@s.whatsapp.net", self.username + "@s.whatsapp.net", self.onUploadSucccess, self.onUploadError, self.onUploadProgress)
 		
-		logging.info("Path %s" %path)
-		logging.info("Url %s" %url)
+		self._d("Path %s" %path)
+		self._d("Url %s" %url)
 		
 		MU.upload(path, url, asset.id)
 
 	def _sendAsset(self, asset_id):
-		logging.info("Sending an uploaded asset %s" %asset_id)
+		self._d("Sending an uploaded asset %s" %asset_id)
 		upload_jobs = self.s.query(Job).filter_by(asset_id = asset_id).all()
-		logging.info("Found %s jobs tied to this asset" %len(upload_jobs))
+		self._d("Found %s jobs tied to this asset" %len(upload_jobs))
 		for job in upload_jobs:
-			logging.info("Found job with sent %s" %job.sent)
+			self._d("Found job with sent %s" %job.sent)
 			if job.next_job_id is not None:
 				next_job = self.s.query(Job).get(job.next_job_id)
 
-				logging.info("Next job %s" %next_job.id)
-				logging.info("Next job sent? %s" %next_job.sent)
-				logging.info("Next job runs? %s" %next_job.runs)
+				self._d("Next job %s" %next_job.id)
+				self._d("Next job sent? %s" %next_job.sent)
+				self._d("Next job runs? %s" %next_job.runs)
 				if next_job.method == "sendImage" and next_job.sent == True and next_job.runs == 0:
 					next_job.sent = False
 		self.s.commit()
 
 	def onUploadSucccess(self, url, _id):
-		logging.info("Upload success!")
-		logging.info("Url %s" %url)
+		self._d("Upload success!")
+		self._d("Url %s" %url)
 		if _id is not None:
 			asset = self.s.query(Asset).get(_id)
 			asset.mms_url = url
@@ -463,13 +438,13 @@ class Server(Thread):
 			self._sendAsset(asset.id)
 		
 	def onUploadError(self):
-		logging.info("Error with upload")
+		self._d("Error with upload")
 
 	def onUploadProgress(self, progress):
-		logging.info("Upload Progress")
+		self._d("Upload Progress")
 
 	def requestMediaUrl(self, url, asset, preview):
-		logging.info("Requesting Url: %s" %url)	
+		self._d("Requesting Url: %s" %url)	
 		mtype = asset.asset_type.lower()
 		sha1 = hashlib.sha256()
 
@@ -548,8 +523,8 @@ class Server(Thread):
 		card.add('n')
 		card.n.value = vobject.vcard.Name(family=family_name, given=given_name)
 
-		logging.info("First name %s" %family_name)
-		logging.info("Last name %s" %given_name)
+		self._d("First name %s" %family_name)
+		self._d("Last name %s" %given_name)
 
 		api_url = self.url  + "/api/v1/base/status?token=%s" %account.auth_token
 		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
@@ -566,7 +541,7 @@ class Server(Thread):
 			num.value = tel[1]
 			num.type_param = tel[0]
 
-		logging.info("Response is %s" %response)
+		self._d("Response is %s" %response)
 		if response['profile_pic'] != self.url + '/blank-profile.png':			
 			tb = open('tmp/profile_thumb.jpg', 'wb')
 			tb.write(requests.get(response['profile_pic']).content)
@@ -582,108 +557,108 @@ class Server(Thread):
 			# card.photo.encoding_param = "b"
 
 
-		logging.info("Data %s" %card.serialize())
+		self._d("Data %s" %card.serialize())
 		self.methodsInterface.call("message_vcardSend", (target, card.serialize(), name))
 
 	def sendAudio(self, target, asset):
-		logging.info("Sending %s" %asset.mms_url)
-		logging.info("To %s" %target)
-		logging.info("Name %s" %asset.name)
-		logging.info("Size %s" %asset.audio_file_size)
+		self._d("Sending %s" %asset.mms_url)
+		self._d("To %s" %target)
+		self._d("Name %s" %asset.name)
+		self._d("Size %s" %asset.audio_file_size)
 		self.methodsInterface.call("message_audioSend", (target, asset.mms_url, asset.name, str(asset.audio_file_size)))
 
 	def sendImage(self, target, asset):
 		f = open(self.getImageThumbnailFile(asset), 'r')
 		stream = base64.b64encode(f.read())
 		f.close()    	
-		logging.info("Target %s" %target)
-		logging.info("URL %s" %asset.mms_url)
-		logging.info("URL %s" %asset.asset_hash)
+		self._d("Target %s" %target)
+		self._d("URL %s" %asset.mms_url)
+		self._d("URL %s" %asset.asset_hash)
 		rst = self.methodsInterface.call("message_imageSend",(target,asset.mms_url,"Image", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
-		logging.info("Result of send image %s" %rst)
+		self._d("Result of send image %s" %rst)
 		return rst
 
 	def sendMessage(self, target, text):
-		logging.info("Message %s" %text)
+		self._d("Message %s" %text)
 		jid = target
-		logging.info("To %s" %jid)
+		self._d("To %s" %jid)
 		rst = self.methodsInterface.call("message_send", (jid, text))	
 		return rst
 
 	def onGroupSubjectReceived(self,messageId,jid,author,subject,timestamp,receiptRequested):
-		logging.info("Group subject received")
+		self._d("Group subject received")
 		if receiptRequested and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
 		data = { "name" : subject, "group_type" : "External", "jid" : jid }
 		self._post("/groups", data)
-		logging.info("Updated the group")
+		self._d("Updated the group")
 
 	def onGroupAddParticipantsSuccess(self, groupJid, jid):
-		logging.info("Added participant %s" %jid)
+		self._d("Added participant %s" %jid)
 		# check the profile pic
 		self.checkProfilePic(jid[0])
 
 	def onGroupRemoveParticipantsSuccess(self, groupJid, jid):
-		logging.info("Removed participant %s" %jid)
+		self._d("Removed participant %s" %jid)
 
 	def onNotificationGroupParticipantAdded(self, groupJid, jid):
-		logging.info("Group participant added %s" %jid)		
+		self._d("Group participant added %s" %jid)		
 		data = { "groupJid" : groupJid, "phone_number": jid.split("@")[0] }
 				
 		self._post("/groups/add_member", data)
 
 	def onNotificationRemovedFromGroup(self, groupJid,jid):
-		logging.info("You were removed from the group %s" %groupJid)
+		self._d("You were removed from the group %s" %groupJid)
 
 		put_url = self.url  + "/groups/remove_member"
 		data = { "groupJid" : groupJid, 'phone_number': jid.split("@")[0] }		
 		self._post("/groups/remove_member", data)
-		logging.info("Updated the group")
+		self._d("Updated the group")
 
 	def onGotGroupParticipants(self, groupJid, jids):
-		logging.info("Got group participants")
+		self._d("Got group participants")
 
 		data = { "groupJid" : groupJid, "jids" : jids }
 		self._post("/groups/update_membership", data)
 
 	def onGroupCreateSuccess(self, groupJid):
-		logging.info("Created with id %s" %groupJid)
+		self._d("Created with id %s" %groupJid)
 		self.methodsInterface.call("group_getInfo", (groupJid,))
 
 	def onGroupGotInfo(self,jid,owner,subject,subjectOwner,subjectTimestamp,creationTimestamp):
-		logging.info("Group info %s - %s" %(jid, subject))
+		self._d("Group info %s - %s" %(jid, subject))
 		
 		data = { "name" : subject, "jid" : jid }
 		self._post("/update_group", data)
-		logging.info("Updated the group")
+		self._d("Updated the group")
 
 	def onGroupCreateFail(self, errorCode):
-		logging.info("Error creating a group %s" %errorCode)
+		self._d("Error creating a group %s" %errorCode)
 
 	def onSetStatusSuccess(self,jid,messageId):
-		logging.info("Set the profile message for %s - %s" %(jid, messageId))
+		self._d("Set the profile message for %s - %s" %(jid, messageId))
 
 	def onAuthSuccess(self, username):
-		logging.info("We are authenticated")
+		self._d("We are authenticated")
 		self.methodsInterface.call("ready")
 		self.setStatus(1, "Authenticated")
         
 	def setStatus(self, status, message="Status message"):
-		logging.info("Setting status %s" %status)
+		self._d("Setting status %s" %status)
 		data = { "status" : status, "message" : message }
 		self._post("/status", data)
 
 	def onAuthFailed(self, username, err):
-		logging.info("Authentication failed for %s" %username)
+		self._d("Authentication failed for %s" %username)
 		
 	def onDisconnected(self, reason):
-		logging.info("Disconnected! Reason: %s" %reason)
+		self._d("Disconnected! Reason: %s" %reason)
 		self.setStatus(0, "Got disconnected")
 		# self.done = True
 		account = self.s.query(Account).get(self.account_id)
 		if account.off_line == False:
-			logging.info('About to log in again with %s and %s' %(self.username, self.password))
+			self._d('About to log in again with %s and %s' %(self.username, self.password))
 			self.login(self.username, self.password, self.account_id)
 		elif account.off_line == True and self.job is not None:			
 			# call the current job
@@ -709,7 +684,7 @@ class Server(Thread):
 
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
-		logging.info('Got profile picture')
+		self._d('Got profile picture')
 		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload?account=" + self.username
 		files = {'file': open(filePath, 'rb')}
 		r = requests.post(url, files=files)
@@ -727,8 +702,8 @@ class Server(Thread):
 				self.methodsInterface.call("contact_getProfilePicture", (jid,))	
 
 	def onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
-		logging.info('Received a message on the group %s' %content)
-		logging.info('JID %s - %s - %s' %(jid, pushName, author))
+		self._d('Received a message on the group %s' %content)
+		self._d('JID %s - %s - %s' %(jid, pushName, author))
 
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
@@ -755,7 +730,7 @@ class Server(Thread):
 		r = requests.post(self.url + url, data=json.dumps(data), headers=headers)
 
 	def onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadCast):
-		logging.info('Message Received %s' %messageContent)
+		self._d('Message Received %s' %messageContent)
 		phone_number = jid.split("@")[0]
 
 		if wantsReceipt and self.sendReceipts:
@@ -774,7 +749,7 @@ class Server(Thread):
 		self.checkProfilePic(jid)
 
 	def onLocationReceived(self, messageId, jid, name, preview, latitude, longitude, wantsReceipt, isBroadcast):
-		logging.info('Location Received')	
+		self._d('Location Received')	
 		phone_number = jid.split("@")[0]
 
 		if wantsReceipt and self.sendReceipts:
@@ -785,7 +760,7 @@ class Server(Thread):
 		
 
 	def onImageReceived(self, messageId, jid, preview, url, size, wantsReceipt, isBroadCast):	
-		logging.info('Image Received')	
+		self._d('Image Received')	
 		phone_number = jid.split("@")[0]
 
 		data = { "message" : { 'url' : url, 'message_type' : 'Image' , 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
@@ -794,16 +769,6 @@ class Server(Thread):
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
-		# channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
-		# self.pubnub.publish({
-		# 	'channel' : channel,
-		# 	'message' : {
-		# 		'type' : 'image',
-		# 		'phone_number' : phone_number,
-		# 		'url' : url,
-		# 		'name' : ''
-		# 	}
-		# })
 		self._sendRealtime({
 			'type' : 'image',
 			'phone_number' : phone_number,
@@ -824,8 +789,8 @@ class Server(Thread):
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
 	def onAudioReceived(self, messageId, jid, url, size, wantsReceipt, isBroadcast):
-		logging.info("Audio received %s" %messageId)
-		logging.info("url: %s" %url)
+		self._d("Audio received %s" %messageId)
+		self._d("url: %s" %url)
 		phone_number = jid.split("@")[0]
 
 		data = { "message" : { 'url' : url,  'message_type': 'Audio', 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
@@ -835,9 +800,9 @@ class Server(Thread):
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
 	def onVideoReceived(self, messageId, jid, mediaPreview, mediaUrl, mediaSize, wantsReceipt, isBroadcast):
-		logging.info("Video Received %s" %messageId)
-		logging.info("From %s" %jid)
-		logging.info("url: %s" %mediaUrl)
+		self._d("Video Received %s" %messageId)
+		self._d("From %s" %jid)
+		self._d("url: %s" %mediaUrl)
 
 		phone_number = jid.split("@")[0]
 		data = { "message" : { 'url' : mediaUrl, 'message_type' : 'Video', 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
@@ -849,7 +814,7 @@ class Server(Thread):
 		r = requests.post(post_url, data=json.dumps(data), headers=headers)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
-		logging.info('Profile picture received')
+		self._d('Profile picture received')
 		url = self.url + "/contacts/" + jid.split("@")[0] + "/upload?account=" + self.username
 		files = {'file': open(filePath, 'rb')}
 		r = requests.post(url, files=files)
