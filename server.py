@@ -76,6 +76,7 @@ class Job(Base):
 	runs = Column(Integer)
 	next_job_id = Column(Integer)
 	asset_id = Column(Integer)
+	off_line = Column(Boolean())
 
 	def __init__(self, method, targets, sent, args, scheduled_time):
 		self.method = method
@@ -153,13 +154,15 @@ class Server(Thread):
 		print "Upload failed"
 	
 	def login(self, username, password, id):
-		logging.info("In Login : %s" %username)
+		# logging.info("In Login : %s" %username)
+
 		self.username = username
 		self.password = password
 		self.account_id = id
 		self.use_realtime = os.environ['USE_REALTIME'] == "true"
 		self.pubnub_channel = os.environ['PUB_CHANNEL'] + "_%s" %self.username
 		
+		self._d("Logging in")
 		self.methodsInterface.call("auth_login", (self.username, self.password))
 		self.methodsInterface.call("presence_sendAvailable", ())
 		
@@ -174,135 +177,127 @@ class Server(Thread):
 			logging.info("Pending Jobs %s" % len(jobs))
 
 		acc = self._getAccount()
-		logging.info("Found the account %s" %acc.off_line)
+		logging.info("Found the account. Offline status is %s" %acc.off_line)
 		
 		for job in jobs:									
 			if self._onSchedule(job.scheduled_time) and acc.off_line == False:
 				logging.info("Calling %s" %job.method)
 				job.runs += 1
-				if job.method == "profile_setStatus":
-					# self.methodsInterface.call(job.method, (job.args,))
-					job.sent = True
+
+				if job.off_line == True:
+					account = self._getAccount()
+					account.off_line = True										
+
+					job.sent = True					
 					self.job = job
-
-					account = self.s.query(Account).get(self.account_id)
-					account.off_line = True					
-					self.s.commit()
 					
-					self.cm.disconnect("Disconnecting for other jobs")
-				elif job.method == "broadcast_Image":
-					job.sent = True
-					self.job = job
-
-					account = self.s.query(Account).get(self.account_id)
-					account.off_line = True
 					self.s.commit()
-					self.cm.disconnect("Disconnecting for broadcast image job")
+					self.cm.disconnect("Disconnecting for broadcast image job")						
+				else:
+					if job.method == "group_create":
+						res = self.methodsInterface.call(job.method, (job.args,))
+						job.sent = True
+					elif job.method == "group_end":
+						res = self.methodsInterface.call(job.method, (job.args,))
+						job.sent = True
+					elif job.method == "group_addParticipants":
+						params = job.args.split(",")
+						self.methodsInterface.call(job.method, (params[0], [params[1] + "@s.whatsapp.net"],))
+						job.sent = True
+					elif job.method == "group_removeParticipants":
+						params = job.args.split(",")
+						self.methodsInterface.call(job.method, (params[0], [params[1] + "@s.whatsapp.net"],))
+						job.sent = True
+					elif job.method == "group_getParticipants":				
+						self.methodsInterface.call('group_getParticipants', (job.targets,))
+						job.sent = True
+					elif job.method == "contact_getProfilePicture":
+						self.methodsInterface.call("contact_getProfilePicture", (job.args,))
+						job.sent = True
+					elif job.method == "sendMessage":
+						
+						if job.simulate == True:
+							self.methodsInterface.call("typing_send", (job.targets,))
+							self.methodsInterface.call("typing_paused", (job.targets,))
 
-				elif job.method == "group_create":
-					res = self.methodsInterface.call(job.method, (job.args,))
-					job.sent = True
-				elif job.method == "group_end":
-					res = self.methodsInterface.call(job.method, (job.args,))
-					job.sent = True
-				elif job.method == "group_addParticipants":
-					params = job.args.split(",")
-					self.methodsInterface.call(job.method, (params[0], [params[1] + "@s.whatsapp.net"],))
-					job.sent = True
-				elif job.method == "group_removeParticipants":
-					params = job.args.split(",")
-					self.methodsInterface.call(job.method, (params[0], [params[1] + "@s.whatsapp.net"],))
-					job.sent = True
-				elif job.method == "group_getParticipants":				
-					self.methodsInterface.call('group_getParticipants', (job.targets,))
-					job.sent = True
-				elif job.method == "contact_getProfilePicture":
-					self.methodsInterface.call("contact_getProfilePicture", (job.args,))
-					job.sent = True
-				elif job.method == "sendMessage":
-					
-					if job.simulate == True:
-						self.methodsInterface.call("typing_send", (job.targets,))
-						self.methodsInterface.call("typing_paused", (job.targets,))
+						job.whatsapp_message_id = self.sendMessage(job.targets, job.args)
+						job.sent = True
+					elif job.method == "broadcast_Text":
+						jids = job.targets.split(",")
+						targets = []
+						for jid in jids:
+							targets.append("%s@s.whatsapp.net" %jid)
+						job.whatsapp_message_id = self.methodsInterface.call("message_broadcast", (targets, job.args, ))
 
-					job.whatsapp_message_id = self.sendMessage(job.targets, job.args)
-					job.sent = True
-				elif job.method == "broadcast_Text":
-					jids = job.targets.split(",")
-					targets = []
-					for jid in jids:
-						targets.append("%s@s.whatsapp.net" %jid)
-					job.whatsapp_message_id = self.methodsInterface.call("message_broadcast", (targets, job.args, ))
+						job.sent = True
+					elif job.method == "uploadMedia":
+						args = job.args.split(",")
+						asset_id = args[0]
+						url = args[1]
+						preview = args[2]
+						logging.info("Asset Id: %s" %args[0])
+						asset = self.s.query(Asset).get(asset_id)				
+						logging.info("File name: %s" %asset.file_file_name)
+						logging.info("Video name: %s" %asset.video_file_name)
+						logging.info("Url: %s" %asset.mms_url)
 
-					job.sent = True
-				elif job.method == "uploadMedia":
-					args = job.args.split(",")
-					asset_id = args[0]
-					url = args[1]
-					preview = args[2]
-					logging.info("Asset Id: %s" %args[0])
-					asset = self.s.query(Asset).get(asset_id)				
-					logging.info("File name: %s" %asset.file_file_name)
-					logging.info("Video name: %s" %asset.video_file_name)
-					logging.info("Url: %s" %asset.mms_url)
+						if asset.mms_url == None:
+							self.requestMediaUrl(url, asset, preview)
+						job.sent = True
+					elif job.method == "uploadAudio":
+						args = job.args.split(",")
+						asset_id = args[0]
+						url = args[1]
+						logging.info("Asset Id: %s" %args[0])
+						asset = self.s.query(Asset).get(asset_id)
+						logging.info("File name: %s" %asset.audio_file_name)
 
-					if asset.mms_url == None:
-						self.requestMediaUrl(url, asset, preview)
-					job.sent = True
-				elif job.method == "uploadAudio":
-					args = job.args.split(",")
-					asset_id = args[0]
-					url = args[1]
-					logging.info("Asset Id: %s" %args[0])
-					asset = self.s.query(Asset).get(asset_id)
-					logging.info("File name: %s" %asset.audio_file_name)
+						if asset.mms_url == None:
+							self.requestMediaUrl(url, asset, None)
+						job.sent = True
+					elif job.method == "sendImage":
+						asset = self._getAsset(job.args)					
+						job.whatsapp_message_id = self.sendImage(job.targets + "@s.whatsapp.net", asset)
+						job.sent = True
+					elif job.method == "sendContact":
+						jids = job.targets.split(",")
+						for jid in jids:
+							self.sendVCard(jid, job.args)
+						job.sent = True
+					elif job.method == "sendAudio":
+						asset = self._getAsset(job.args)
+						jids = job.targets.split(",")
+						for jid in jids:
+							self.sendAudio(jid + "@s.whatsapp.net", asset)
+						job.sent = True
+					elif job.method == "broadcast_Video":
+						args = job.args.split(",")
+						asset = self._getAsset(job.args)
+						jids = job.targets.split(",")
+						for jid in jids:
+							self.sendVideo(jid + "@s.whatsapp.net", asset)
+							time.sleep(1)
+						job.sent = True
+					elif job.method == "broadcast_Group_Image":
+						asset = self._getAsset(job.args)
+						self.sendImage(job.targets, asset)
+						job.sent = True
+					elif job.method == "broadcast_Group_Video":
+						asset = self._getAsset(job.args)
+						self.sendVideo(job.targets, asset)
+						job.sent = True
+					elif job.method == "typing_send":
+						job.sent = True
+					elif job.method == "setProfilePicture":
+						job.sent = True
+						self.setProfilePicture(job)
+					elif job.method == "disconnect":
+						account = self.s.query(Account).get(self.account_id)
+						account.off_line = True
 
-					if asset.mms_url == None:
-						self.requestMediaUrl(url, asset, None)
-					job.sent = True
-				elif job.method == "sendImage":
-					asset = self._getAsset(job.args)					
-					job.whatsapp_message_id = self.sendImage(job.targets + "@s.whatsapp.net", asset)
-					job.sent = True
-				elif job.method == "sendContact":
-					jids = job.targets.split(",")
-					for jid in jids:
-						self.sendVCard(jid, job.args)
-					job.sent = True
-				elif job.method == "sendAudio":
-					asset = self._getAsset(job.args)
-					jids = job.targets.split(",")
-					for jid in jids:
-						self.sendAudio(jid + "@s.whatsapp.net", asset)
-					job.sent = True
-				elif job.method == "broadcast_Video":
-					args = job.args.split(",")
-					asset = self._getAsset(job.args)
-					jids = job.targets.split(",")
-					for jid in jids:
-						self.sendVideo(jid + "@s.whatsapp.net", asset)
-						time.sleep(1)
-					job.sent = True
-				elif job.method == "broadcast_Group_Image":
-					asset = self._getAsset(job.args)
-					self.sendImage(job.targets, asset)
-					job.sent = True
-				elif job.method == "broadcast_Group_Video":
-					asset = self._getAsset(job.args)
-					self.sendVideo(job.targets, asset)
-					job.sent = True
-				elif job.method == "typing_send":
-					job.sent = True
-				elif job.method == "setProfilePicture":
-					job.sent = True
-					self.setProfilePicture(job)
-				elif job.method == "disconnect":
-					account = self.s.query(Account).get(self.account_id)
-					account.off_line = True
+						self.cm.disconnect("Disconnecting for other jobs")
 
-					self.cm.disconnect("Disconnecting for other jobs")
-
-					job.sent = True
+						job.sent = True
 		if acc.off_line == True and self.job == None:
 			logging.info("Time to reconnect")
 			
@@ -329,6 +324,8 @@ class Server(Thread):
 
 		logging.info("Finished setting of the profile")
 
+	def _d(self, message):
+		logging.info("%s - %s" %(self.username, message))
 
 	def _onSchedule(self,scheduled_time):
 		return (scheduled_time is None or datetime.now() > self.utc_to_local(scheduled_time))
@@ -681,7 +678,7 @@ class Server(Thread):
 		logging.info("Authentication failed for %s" %username)
 		
 	def onDisconnected(self, reason):
-		logging.info('Disconnected')
+		logging.info("Disconnected! Reason: %s" %reason)
 		self.setStatus(0, "Got disconnected")
 		# self.done = True
 		account = self.s.query(Account).get(self.account_id)
