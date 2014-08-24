@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from pubnub import Pubnub
 
 Base = declarative_base()
-logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
+logging.basicConfig(filename='logs/production.log',level=logging.INFO, format='%(asctime)s %(message)s')
 # logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
 class Contact(Base):
@@ -181,7 +181,7 @@ class Server(Thread):
 			self._d("Pending Jobs %s" % len(jobs))
 
 		acc = self._getAccount()
-		self._d("Offline : %s" %acc.off_line)
+		self._d("Offline : %s" %acc.off_line, True)
 		
 		for job in jobs:									
 			if self._onSchedule(job.scheduled_time) and acc.off_line == False:
@@ -196,7 +196,7 @@ class Server(Thread):
 					self.job = job
 					
 					self.s.commit()
-					self.cm.disconnect("Disconnecting for broadcast image job")						
+					self.cm.disconnect("Disconnecting for offline jobs")						
 				else:
 					if job.method == "group_create":
 						res = self.methodsInterface.call(job.method, (job.args,))
@@ -305,8 +305,11 @@ class Server(Thread):
 
 		self.s.commit()		
 
-	def _d(self, message):
-		logging.info("%s - %s" %(self.username, message))
+	def _d(self, message, debug=False):
+		if debug == False:
+			logging.info("%s - %s" %(self.username, message))
+		else:
+			logging.debug("%s - %s" %(self.username, message))
 
 	def _onSchedule(self,scheduled_time):
 		return (scheduled_time is None or datetime.now() > self.utc_to_local(scheduled_time))
@@ -666,11 +669,18 @@ class Server(Thread):
 
 	def onAuthFailed(self, username, err):
 		self._d("Authentication failed for %s" %username)
+
+	def _postOffline(self, args):
+		url = os.environ['API_URL']
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		params = { "nickname" : account.name, "password" : account.whatsapp_password, "jid" : account.phone_number }
+		r = requests.post(url, data=dict(params.items() + args.items()))
+		return r
 		
 	def onDisconnected(self, reason):
 		self._d("Disconnected! Reason: %s" %reason)
 		self.setStatus(0, "Got disconnected")
-		# self.done = True
+		
 		account = self.s.query(Account).get(self.account_id)
 		if account.off_line == False:
 			self._d('About to log in again with %s and %s' %(self.username, self.password))
@@ -681,17 +691,20 @@ class Server(Thread):
 			url = os.environ['API_URL']
 			headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
 			if job.method == "profile_setStatus":				
-				args = { "nickname" : account.name, "method" : "profile_setStatus", "password" : account.whatsapp_password, "status" : job.args, "jid" : account.phone_number }
+				args = { "nickname" : account.name, "method" : job.method, "password" : account.whatsapp_password, "status" : job.args, "jid" : account.phone_number }
 				r = requests.post(url, data=args)
-				print r.text
+				self._d(r.text)
+			elif job.method == "setProfilePicture":				
+				ret = self._postOffline({"method" : job.method, "image_url" : job.args })
+				self._d(ret.text)
 			elif job.method == "broadcast_Image":
 				image_url = job.args.split(",")[1]
 				full_url = os.environ['URL'] + image_url
-				print full_url				
+				self._d(full_url)				
 				args = { "nickname" : account.name, "targets" : job.targets, "method" : job.method , "password" : account.whatsapp_password , "image" : full_url, "jid" : account.phone_number, "externalId" : job.id }
 
 				r = requests.post(url, data=args)
-				print r.text
+				self._d(r.text)
 
 			self.job = None
 			# account.off_line = False
