@@ -19,6 +19,12 @@ Base = declarative_base()
 logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
 # logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
+class Contact(Base):
+	__tablename__ = 'contacts'
+	id = Column(Integer, primary_key=True)
+	phone_number = Column(String(255))
+	account_id = Column(Integer)
+
 class Message(Base):
 	__tablename__ = 'messages'
 	id = Column(Integer, primary_key=True)
@@ -305,6 +311,9 @@ class Server(Thread):
 	def _onSchedule(self,scheduled_time):
 		return (scheduled_time is None or datetime.now() > self.utc_to_local(scheduled_time))
 
+	def _getContact(self,phone_number):
+		return self.s.query(Contact).filter_by(account_id = self.account_id, phone_number = phone_number).scalar()
+
 	def _getAccount(self):
 		return self.s.query(Account).get(self.account_id)
 
@@ -359,6 +368,12 @@ class Server(Thread):
 
 	def onPresenceAvailable(self, jid):
 		self._d("JID available %s" %jid)
+		phone_number = jid.split("@")[0]
+		contact = self._getContact(phone_number)
+
+		if contact is not None:
+			url = "/contacts/%s" %contact.id
+			self._patch(url, { "contact" : { "last_seen" : str(datetime.now()) } })
 
 	def onPresenceUnavailable(self, jid, last):
 		self._d("JID unavilable %s" %jid)
