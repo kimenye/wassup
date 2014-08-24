@@ -20,6 +20,11 @@ Base = declarative_base()
 logging.basicConfig(filename='logs/production.log',level=logging.DEBUG, format='%(asctime)s %(message)s')
 
 
+class Contact(Base):
+	__tablename__ = 'contacts'
+	id = Column(Integer, primary_key=True)
+	phone_number = Column(String(255))
+
 class Message(Base):
 	__tablename__ = 'messages'
 	id = Column(Integer, primary_key=True)
@@ -300,7 +305,8 @@ class Server(Thread):
 
 		logging.info("Finished setting of the profile")
 
-
+	def _getContact(self,phone_number):
+		return self.s.query(Contact).get(phone_number)
 
 	def _onSchedule(self,scheduled_time):
 		return (scheduled_time is None or datetime.now() > self.utc_to_local(scheduled_time))
@@ -352,6 +358,14 @@ class Server(Thread):
 
 	def onPresenceAvailable(self, jid):
 		logging.info("JID available %s" %jid)
+		phone_number = jid.split("@")[0]
+		contact = self._getContact(phone_number)
+
+		if contact is not None:
+			put_url = "/contacts/%s" %contact.id
+			data = { "contact" : { "last_seen" : datetime.now() }}
+			self._patch(put_url, data)
+
 
 	def onPresenceUnavailable(self, jid):
 		logging.info("JID unavilable %s" %jid)
