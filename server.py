@@ -469,6 +469,8 @@ class Server(Thread):
 		if not url.startswith("http"):
 			url = os.environ['URL'] + url
 
+		self._d("Full url : %s" %url)
+
 		if preview is not None and not preview.startswith("http"):
 			preview = os.environ['URL'] + preview
 		
@@ -477,11 +479,14 @@ class Server(Thread):
 		fp.write(requests.get(url).content)
 		fp.close()
 
+		self._d("Written file to %s" %file_name)
+
 		if asset.asset_type != "Audio":
-			tb_path = self.getImageThumbnailFile(asset)
+			tb_path = self.getImageThumbnailFile(asset)			
 			tb = open(tb_path, 'wb')
 			tb.write(requests.get(preview).content)
 			tb.close()
+			self._d("Written thumbnail path : %s" %tb_path)
 
 
 		fp = open(file_name, 'rb')
