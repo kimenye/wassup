@@ -58,6 +58,7 @@ class Asset(Base):
 	file_file_size = Column(Integer)
 	audio_file_name = Column(String(255))
 	audio_file_size = Column(Integer)
+	url = Column(String(255))
 
 	def __init__(self, asset_hash, mms_url):
 		self.asset_hash = asset_hash
@@ -174,6 +175,12 @@ class Server(Thread):
 		while not self.done:
 			self.seekJobs()
 			time.sleep(2)
+
+	def _formatContacts(self, raw):
+		contacts = raw.split(",")
+		for i, _ in enumerate(contacts):		
+			contacts[i] = contacts[i] + "@s.whatsapp.net"
+		return contacts
 	
 	def seekJobs(self):
 		jobs = self.s.query(Job).filter_by(sent=False, account_id=self.account_id).all()
@@ -205,12 +212,11 @@ class Server(Thread):
 						res = self.methodsInterface.call(job.method, (job.args,))
 						job.sent = True
 					elif job.method == "group_addParticipants":
-						params = job.args.split(",")
-						self.methodsInterface.call(job.method, (params[0], [params[1] + "@s.whatsapp.net"],))
+						self.methodsInterface.call(job.method, (job.targets, self._formatContacts(job.args),))
 						job.sent = True
 					elif job.method == "group_removeParticipants":
-						params = job.args.split(",")
-						self.methodsInterface.call(job.method, (params[0], [params[1] + "@s.whatsapp.net"],))
+						# params = job.args.split(",")
+						self.methodsInterface.call(job.method, (job.targets, self._formatContacts(job.args),))
 						job.sent = True
 					elif job.method == "group_getParticipants":				
 						self.methodsInterface.call('group_getParticipants', (job.targets,))
@@ -235,30 +241,28 @@ class Server(Thread):
 
 						job.sent = True
 					elif job.method == "uploadMedia":
-						args = job.args.split(",")
-						asset_id = args[0]
-						url = args[1]
-						preview = args[2]
-						self._d("Asset Id: %s" %args[0])
-						asset = self.s.query(Asset).get(asset_id)				
+						asset = None
+						preview = None
+						url = None
+						if job.args is not None:
+							args = job.args.split(",")
+							asset_id = args[0]
+							url = args[1]
+							preview = args[2]
+							self._d("Asset Id: %s" %args[0])
+							asset = self.s.query(Asset).get(asset_id)				
+						else:
+							asset = self.s.query(Asset).get(job.asset_id)
+							url = asset.url
+
 						self._d("File name: %s" %asset.file_file_name)
 						self._d("Video name: %s" %asset.video_file_name)
-						self._d("Url: %s" %asset.mms_url)
+						self._d("MMS Url: %s" %asset.mms_url)
+						self._d("Source URL: %s" %asset.url)
 
 						if asset.mms_url == None:
 							self.requestMediaUrl(url, asset, preview)
-						job.sent = True
-					elif job.method == "uploadAudio":
-						args = job.args.split(",")
-						asset_id = args[0]
-						url = args[1]
-						self._d("Asset Id: %s" %args[0])
-						asset = self.s.query(Asset).get(asset_id)
-						self._d("File name: %s" %asset.audio_file_name)
-
-						if asset.mms_url == None:
-							self.requestMediaUrl(url, asset, None)
-						job.sent = True
+						job.sent = True					
 					elif job.method == "sendImage":
 						asset = self._getAsset(job.args)					
 						job.whatsapp_message_id = self.sendImage(job.targets + "@s.whatsapp.net", asset)
@@ -269,10 +273,8 @@ class Server(Thread):
 							self.sendVCard(jid, job.args)
 						job.sent = True
 					elif job.method == "sendAudio":
-						asset = self._getAsset(job.args)
-						jids = job.targets.split(",")
-						for jid in jids:
-							self.sendAudio(jid + "@s.whatsapp.net", asset)
+						asset = self.s.query(Asset).get(job.asset_id)
+						self.sendAudio(job.targets + "@s.whatsapp.net", asset)
 						job.sent = True
 					elif job.method == "broadcast_Video":
 						args = job.args.split(",")
@@ -431,17 +433,19 @@ class Server(Thread):
 
 	def _sendAsset(self, asset_id):
 		self._d("Sending an uploaded asset %s" %asset_id)
-		upload_jobs = self.s.query(Job).filter_by(asset_id = asset_id).all()
+		upload_jobs = self.s.query(Job).filter_by(asset_id = asset_id, method="uploadMedia").all()
 		self._d("Found %s jobs tied to this asset" %len(upload_jobs))
 		for job in upload_jobs:
 			self._d("Found job with sent %s" %job.sent)
+			# logging.info("%s - %s" %(self.username, message))
+			self._d("Found job %s - %s " %(job.id, job.next_job_id))
 			if job.next_job_id is not None:
 				next_job = self.s.query(Job).get(job.next_job_id)
 
-				self._d("Next job %s" %next_job.id)
+				self._d("Next job %s - %s" %(next_job.id, next_job.method))
 				self._d("Next job sent? %s" %next_job.sent)
 				self._d("Next job runs? %s" %next_job.runs)
-				if next_job.method == "sendImage" and next_job.sent == True and next_job.runs == 0:
+				if (next_job.method == "sendImage" or next_job.method == "sendAudio") and next_job.sent == True and next_job.runs == 0:
 					next_job.sent = False
 		self.s.commit()
 
@@ -473,6 +477,10 @@ class Server(Thread):
 
 		if preview is not None and not preview.startswith("http"):
 			preview = os.environ['URL'] + preview
+
+		if asset.asset_type == "Audio":
+			url = asset.url
+
 		
 		file_name = self.getImageFile(asset)
 		fp = open(file_name,'wb')
@@ -511,7 +519,8 @@ class Server(Thread):
 			file_name = "tmp/%s" %path
 			return file_name
 		elif asset.asset_type == "Audio":
-			path = "_%s"%asset.id + asset.audio_file_name
+			# path = "_%s"%asset.id + asset.audio_file_name
+			path = "_%s"%asset.id + asset.name
 			file_name = "tmp/%s" %path
 			return file_name
 
@@ -588,7 +597,8 @@ class Server(Thread):
 		self._d("To %s" %target)
 		self._d("Name %s" %asset.name)
 		self._d("Size %s" %asset.audio_file_size)
-		self.methodsInterface.call("message_audioSend", (target, asset.mms_url, asset.name, str(asset.audio_file_size)))
+		rst = self.methodsInterface.call("message_audioSend", (target, asset.mms_url, asset.name, str(asset.audio_file_size)))
+		return rst
 
 	def sendImage(self, target, asset):
 		f = open(self.getImageThumbnailFile(asset), 'r')
@@ -654,7 +664,19 @@ class Server(Thread):
 		
 		data = { "name" : subject, "jid" : jid }
 		self._post("/update_group", data)
-		self._d("Updated the group")
+		self._d("Updated the group %s" %subject)
+
+		create_job = self.s.query(Job).filter_by(method="group_create", args=subject).first()
+		if create_job.next_job_id is not None:
+			next_job = self.s.query(Job).get(create_job.next_job_id)
+
+			self._d("Next job %s" %next_job.id)
+			self._d("Next job sent? %s" %next_job.sent)
+			self._d("Next job runs? %s" %next_job.runs)
+			if next_job.method == "group_addParticipants" and next_job.sent == True and next_job.runs == 0:
+				next_job.sent = False
+				next_job.targets = jid
+				self.s.commit()
 
 	def onGroupCreateFail(self, errorCode):
 		self._d("Error creating a group %s" %errorCode)
