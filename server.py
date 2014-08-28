@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, desc, Float
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, desc, Float, Text
 from sqlalchemy.orm import sessionmaker
 from Yowsup.connectionmanager import YowsupConnectionManager
 from Yowsup.Common.utilities import Utilities
@@ -103,6 +103,7 @@ class Location(Base):
 	name = Column(String(255))
 	latitude = Column(Float())
 	longitude = Column(Float())
+	preview = Column(Text)
 
 class Server(Thread):
 	def __init__(self, url, keepAlive = False, sendReceipts = False):
@@ -188,6 +189,9 @@ class Server(Thread):
 		for i, _ in enumerate(contacts):		
 			contacts[i] = contacts[i] + "@s.whatsapp.net"
 		return contacts
+
+	def _formatContact(self, phone_number):
+		return phone_number + "@s.whatsapp.net"
 	
 	def seekJobs(self):
 		jobs = self.s.query(Job).filter_by(sent=False, account_id=self.account_id).all()
@@ -299,7 +303,9 @@ class Server(Thread):
 						asset = self._getAsset(job.args)
 						self.sendVideo(job.targets, asset)
 						job.sent = True
-					elif job.method == "typing_send":
+					elif job.method == "sendLocation":
+						location = self.s.query(Location).get(job.args)
+						self.sendLocation(job.targets, location)
 						job.sent = True					
 		if acc.off_line == True and self.job == None:
 			self._d("Reconnecting")
@@ -624,6 +630,15 @@ class Server(Thread):
 		self._d("To %s" %jid)
 		rst = self.methodsInterface.call("message_send", (jid, text))	
 		return rst
+
+	def sendLocation(self, target, location):
+		self._d("Sending location %s,%s to %s" %(str(location.latitude), str(location.longitude), target))
+		jid = self._formatContact(target)
+		# message_locationSend(str jid,float latitude,float longitude,str preview)
+
+		rst = self.methodsInterface.call("message_locationSend", (jid, str(location.latitude), str(location.longitude), location.preview))
+		return rst
+
 
 	def onGroupSubjectReceived(self,messageId,jid,author,subject,timestamp,receiptRequested):
 		self._d("Group subject received")
