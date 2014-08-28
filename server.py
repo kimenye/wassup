@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, desc
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, desc, Float
 from sqlalchemy.orm import sessionmaker
 from Yowsup.connectionmanager import YowsupConnectionManager
 from Yowsup.Common.utilities import Utilities
@@ -96,6 +96,13 @@ class BroadcastPart(Base):
 	__tablename__ = 'broadcast_parts'
 	id = Column(Integer, primary_key=True)
 	whatsapp_id = Column(String(255))
+
+class Location(Base):
+	__tablename__ = 'locations'
+	id = Column(Integer, primary_key=True)
+	name = Column(String(255))
+	latitude = Column(Float())
+	longitude = Column(Float())
 
 class Server(Thread):
 	def __init__(self, url, keepAlive = False, sendReceipts = False):
