@@ -359,7 +359,7 @@ class Server(Thread):
 			job.received = True
 			session.commit()
 
-			if job.method == "sendMessage":
+			if job.method == "sendMessage" or job.method == "sendImage":
 				m = session.query(Message).get(job.message_id)
 				self._d("Looking for message with id to send a receipt %s" %job.message_id)
 				if m is not None:
@@ -496,6 +496,8 @@ class Server(Thread):
 
 		
 		file_name = self.getImageFile(asset)
+
+		self._d("Got file_name %s" %file_name)
 		fp = open(file_name,'wb')
 		fp.write(requests.get(url).content)
 		fp.close()
