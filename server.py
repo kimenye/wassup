@@ -720,6 +720,7 @@ class Server(Thread):
 
 	def onAuthFailed(self, username, err):
 		self._d("Authentication failed for %s" %username)
+		self._post("/wa_auth_error", {})
 
 	def _postOffline(self, args):
 		url = os.environ['API_URL']
