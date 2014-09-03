@@ -149,6 +149,8 @@ class Server(Thread):
 		self.signalsInterface.registerListener("group_gotInfo", self.onGroupGotInfo)
 		self.signalsInterface.registerListener("group_addParticipantsSuccess", self.onGroupAddParticipantsSuccess)
 		self.signalsInterface.registerListener("group_removeParticipantsSuccess", self.onGroupRemoveParticipantsSuccess)
+		self.signalsInterface.registerListener("group_imageReceived", self.onGroupImageReceived)
+
 
 		self.signalsInterface.registerListener("group_subjectReceived", self.onGroupSubjectReceived)
 		self.signalsInterface.registerListener("notification_removedFromGroup", self.onNotificationRemovedFromGroup)
@@ -264,8 +266,11 @@ class Server(Thread):
 							next_job.pending = False
 						job.sent = True					
 					elif job.method == "sendImage":
-						asset = self._getAsset(job.args)					
-						job.whatsapp_message_id = self.sendImage(job.targets + "@s.whatsapp.net", asset)
+						asset = self._getAsset(job.args)		
+						targets = job.targets
+						if "@" not in targets:
+							targets = targets + "@s.whatsapp.net"
+						job.whatsapp_message_id = self.sendImage(targets, asset)
 						job.sent = True
 					elif job.method == "sendVideo":
 						asset = self.s.query(Asset).get(job.asset_id)
@@ -448,15 +453,6 @@ class Server(Thread):
 				next_job = self.s.query(Job).get(job.next_job_id)
 				if next_job.pending == True and next_job.sent == False:
 					next_job.pending = False
-
-			# 	self._d("Next job %s - %s" %(next_job.id, next_job.method))
-			# 	self._d("Next job sent? %s" %next_job.sent)
-			# 	self._d("Next job runs? %s" %next_job.runs)
-			# 	if (next_job.method == "sendImage" or next_job.method == "sendAudio") and next_job.sent == True and next_job.runs == 0:
-			# 		next_job.sent = False
-
-			
-			# get the next job
 
 		self.s.commit()
 
@@ -865,6 +861,23 @@ class Server(Thread):
 		})
 
 		self.checkProfilePic(jid)
+
+	def onGroupImageReceived(self, messageId, jid, author, preview, url, size, wantsReceipt):
+		phone_number = author.split("@")[0]
+		self._d("Group image received %s - %s - %s - %s " %(messageId, jid, phone_number, url))
+
+		if wantsReceipt and self.sendReceipts:
+			self.methodsInterface.call("message_ack", (jid, messageId))
+
+		data = { "message" : { 'url' : url, 'message_type' : 'Image', 'phone_number': phone_number , 'group_jid' : jid, "whatsapp_message_id" : messageId, 'name' : '' } }
+		self._post("/upload", data)
+
+		self._sendRealtime({
+			'type' : 'image',
+			'group_jid' : jid,
+			'url' : url,
+			'from' : phone_number
+		})
 	
 	def onVCardReceived(self, messageId, jid, name, data, wantsReceipt, isBroadcast):				
 		vcard = vobject.readOne( data )
