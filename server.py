@@ -59,6 +59,7 @@ class Asset(Base):
 	audio_file_name = Column(String(255))
 	audio_file_size = Column(Integer)
 	url = Column(String(255))
+	preview_url = Column(String(255))
 
 	def __init__(self, asset_hash, mms_url):
 		self.asset_hash = asset_hash
@@ -84,6 +85,7 @@ class Job(Base):
 	next_job_id = Column(Integer)
 	asset_id = Column(Integer)
 	off_line = Column(Boolean())
+	pending = Column(Boolean())
 
 	def __init__(self, method, targets, sent, args, scheduled_time):
 		self.method = method
@@ -147,6 +149,8 @@ class Server(Thread):
 		self.signalsInterface.registerListener("group_gotInfo", self.onGroupGotInfo)
 		self.signalsInterface.registerListener("group_addParticipantsSuccess", self.onGroupAddParticipantsSuccess)
 		self.signalsInterface.registerListener("group_removeParticipantsSuccess", self.onGroupRemoveParticipantsSuccess)
+		self.signalsInterface.registerListener("group_imageReceived", self.onGroupImageReceived)
+
 
 		self.signalsInterface.registerListener("group_subjectReceived", self.onGroupSubjectReceived)
 		self.signalsInterface.registerListener("notification_removedFromGroup", self.onNotificationRemovedFromGroup)
@@ -194,7 +198,7 @@ class Server(Thread):
 		return phone_number + "@s.whatsapp.net"
 	
 	def seekJobs(self):
-		jobs = self.s.query(Job).filter_by(sent=False, account_id=self.account_id).all()
+		jobs = self.s.query(Job).filter_by(sent=False, account_id=self.account_id, pending=False).all()
 		if len(jobs) > 0:
 			self._d("Pending Jobs %s" % len(jobs))
 
@@ -252,31 +256,25 @@ class Server(Thread):
 
 						job.sent = True
 					elif job.method == "uploadMedia":
-						asset = None
-						preview = None
-						url = None
-						if job.args is not None:
-							args = job.args.split(",")
-							asset_id = args[0]
-							url = args[1]
-							preview = args[2]
-							self._d("Asset Id: %s" %args[0])
-							asset = self.s.query(Asset).get(asset_id)				
-						else:
-							asset = self.s.query(Asset).get(job.asset_id)
-							url = asset.url
-
-						self._d("File name: %s" %asset.file_file_name)
-						self._d("Video name: %s" %asset.video_file_name)
-						self._d("MMS Url: %s" %asset.mms_url)
-						self._d("Source URL: %s" %asset.url)
+						asset = self.s.query(Asset).get(job.asset_id)
 
 						if asset.mms_url == None:
-							self.requestMediaUrl(url, asset, preview)
+							self.requestMediaUrl(asset)
+						else:
+							# find the jobs after this
+							next_job = self.s.query(Job).filter_by(id=job.next_job_id, pending=True).first()
+							next_job.pending = False
 						job.sent = True					
 					elif job.method == "sendImage":
-						asset = self._getAsset(job.args)					
-						job.whatsapp_message_id = self.sendImage(job.targets + "@s.whatsapp.net", asset)
+						asset = self._getAsset(job.args)		
+						targets = job.targets
+						if "@" not in targets:
+							targets = targets + "@s.whatsapp.net"
+						job.whatsapp_message_id = self.sendImage(targets, asset)
+						job.sent = True
+					elif job.method == "sendVideo":
+						asset = self.s.query(Asset).get(job.asset_id)
+						job.whatsapp_message_id = self.sendVideo(job.targets, asset)
 						job.sent = True
 					elif job.method == "sendContact":
 						jids = job.targets.split(",")
@@ -428,7 +426,7 @@ class Server(Thread):
 		self._d("Upload Request success")
 		self._d("The url is %s" %url)
 		self._d("The hash is %s" %_hash)
-		asset = self.s.query(Asset).filter_by(asset_hash=_hash).first()
+		asset = self.s.query(Asset).filter_by(asset_hash=_hash).order_by(desc(Asset.id)).first()
 		asset.mms_url = url
 		self.s.commit()
 
@@ -446,20 +444,16 @@ class Server(Thread):
 
 	def _sendAsset(self, asset_id):
 		self._d("Sending an uploaded asset %s" %asset_id)
-		upload_jobs = self.s.query(Job).filter_by(asset_id = asset_id, method="uploadMedia").all()
+		upload_jobs = self.s.query(Job).filter_by(asset_id = asset_id, method="uploadMedia", sent=True).all()
 		self._d("Found %s jobs tied to this asset" %len(upload_jobs))
 		for job in upload_jobs:
-			self._d("Found job with sent %s" %job.sent)
-			# logging.info("%s - %s" %(self.username, message))
+			self._d("Found job with sent %s" %job.sent)			
 			self._d("Found job %s - %s " %(job.id, job.next_job_id))
 			if job.next_job_id is not None:
 				next_job = self.s.query(Job).get(job.next_job_id)
+				if next_job.pending == True and next_job.sent == False:
+					next_job.pending = False
 
-				self._d("Next job %s - %s" %(next_job.id, next_job.method))
-				self._d("Next job sent? %s" %next_job.sent)
-				self._d("Next job runs? %s" %next_job.runs)
-				if (next_job.method == "sendImage" or next_job.method == "sendAudio") and next_job.sent == True and next_job.runs == 0:
-					next_job.sent = False
 		self.s.commit()
 
 	def onUploadSucccess(self, url, _id):
@@ -478,26 +472,28 @@ class Server(Thread):
 	def onUploadProgress(self, progress):
 		self._d("Upload Progress")
 
-	def requestMediaUrl(self, url, asset, preview):
-		self._d("Requesting Url: %s" %url)	
+	def _link(self, url):
+		if url is not None and not url.startswith("http"):
+			return os.environ['URL'] + url
+		else:
+			return url
+
+	def requestMediaUrl(self, asset):
+		self._d("About to request for Asset %s" %asset.id)
+		self._d("Requesting Url: %s" %asset.url)	
 		mtype = asset.asset_type.lower()
 		sha1 = hashlib.sha256()
 
-		if not url.startswith("http"):
-			url = os.environ['URL'] + url
-
+		url = self._link(asset.url)
+		preview = self._link(asset.preview_url)
 		self._d("Full url : %s" %url)
-
-		if preview is not None and not preview.startswith("http"):
-			preview = os.environ['URL'] + preview
-
-		if asset.asset_type == "Audio":
-			url = asset.url
+		self._d("Preview url: %s" %preview)
 
 		
 		file_name = self.getImageFile(asset)
 
-		self._d("Got file_name %s" %file_name)
+		self._d("File name: %s" %file_name)
+
 		fp = open(file_name,'wb')
 		fp.write(requests.get(url).content)
 		fp.close()
@@ -507,6 +503,7 @@ class Server(Thread):
 		if asset.asset_type != "Audio":
 			tb_path = self.getImageThumbnailFile(asset)			
 			tb = open(tb_path, 'wb')
+			self._d("Preview URL %s" %preview)
 			tb.write(requests.get(preview).content)
 			tb.close()
 			self._d("Written thumbnail path : %s" %tb_path)
@@ -520,7 +517,8 @@ class Server(Thread):
 			asset.asset_hash = hsh
 			self.s.commit()
 
-			self.methodsInterface.call("media_requestUpload", (hsh, mtype, os.path.getsize(file_name)))
+			rst = self.methodsInterface.call("media_requestUpload", (hsh, mtype, os.path.getsize(file_name)))
+			self._d("Requested media upload for %s" %asset.id)
 		finally:
 			fp.close()  
 
@@ -530,11 +528,11 @@ class Server(Thread):
 			file_name = "tmp/%s" %path
 			return file_name
 		elif asset.asset_type == "Video":
-			path = "_%s"%asset.id + asset.video_file_name
-			file_name = "tmp/%s" %path
+			path = "_%s"%asset.id + asset.name
+			file_name = "tmp/%s.mp4" %path
+			self._d("Image filename %s" %file_name)
 			return file_name
 		elif asset.asset_type == "Audio":
-			# path = "_%s"%asset.id + asset.audio_file_name
 			path = "_%s"%asset.id + asset.name
 			file_name = "tmp/%s" %path
 			return file_name
@@ -545,15 +543,21 @@ class Server(Thread):
 			file_name = "tmp/%s" %path
 			return file_name		
 		else:
-			path = "_%s"%asset.id + "_thumb_" + asset.video_file_name
-			file_name = "tmp/%s" %path
+			path = "_%s"%asset.id + "_thumb_" + asset.name
+			file_name = "tmp/%s.jpg" %path
 			return file_name	
 
 	def sendVideo(self, target, asset):
-		f = open(self.getImageThumbnailFile(asset), 'r')
+		self._d("In sendVideo %s" %asset.id)
+		thumbnail = self.getImageThumbnailFile(asset)
+		self._d("The thumbnail %s" %thumbnail)
+		
+		f = open(thumbnail, 'r')
 		stream = base64.b64encode(f.read())
-		f.close()
-		self.methodsInterface.call("message_videoSend",(target,asset.mms_url,"Video", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
+		f.close()		
+		rst = self.methodsInterface.call("message_videoSend",(target,asset.mms_url,"Video", str(os.path.getsize(self.getImageThumbnailFile(asset))), stream))
+		self._d("Called video send %s" %rst)
+		return rst
 
 	def sendVCard(self, target, args):
 		account = self.s.query(Account).get(self.account_id)
@@ -857,6 +861,23 @@ class Server(Thread):
 		})
 
 		self.checkProfilePic(jid)
+
+	def onGroupImageReceived(self, messageId, jid, author, preview, url, size, wantsReceipt):
+		phone_number = author.split("@")[0]
+		self._d("Group image received %s - %s - %s - %s " %(messageId, jid, phone_number, url))
+
+		if wantsReceipt and self.sendReceipts:
+			self.methodsInterface.call("message_ack", (jid, messageId))
+
+		data = { "message" : { 'url' : url, 'message_type' : 'Image', 'phone_number': phone_number , 'group_jid' : jid, "whatsapp_message_id" : messageId, 'name' : '' } }
+		self._post("/upload", data)
+
+		self._sendRealtime({
+			'type' : 'image',
+			'group_jid' : jid,
+			'url' : url,
+			'from' : phone_number
+		})
 	
 	def onVCardReceived(self, messageId, jid, name, data, wantsReceipt, isBroadcast):				
 		vcard = vobject.readOne( data )
@@ -891,7 +912,7 @@ class Server(Thread):
 		# Send a receipt regardless of whether it was a successful upload
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
-		r = requests.post(post_url, data=json.dumps(data), headers=headers)
+		# r = requests.post(post_url, data=json.dumps(data), headers=headers)
 
 	def onGotProfilePicture(self, jid, imageId, filePath):
 		self._d('Profile picture received')

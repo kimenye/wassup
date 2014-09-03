@@ -31,10 +31,11 @@ class MediaUploader(WARequest):
         
         
         try:
-            self._d(sourcePath)
+            self._d("Source path %s" %sourcePath)
             filename = os.path.basename(sourcePath)
-            self._d(filename)
+            self._d("Filename %s" %filename)
             filetype = mimetypes.guess_type(filename)[0]
+            self._d("Guessed mime type %s" %filetype)
             filesize = os.path.getsize(sourcePath)
     
             self.sock.connect((self.url, self.port));
