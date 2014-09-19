@@ -14,9 +14,12 @@ from threading import Thread
 import calendar
 from datetime import datetime, timedelta
 from pubnub import Pubnub
+import rollbar
+import stathat
 
 Base = declarative_base()
 logging.basicConfig(filename='logs/production.log',level=logging.INFO, format='%(asctime)s %(message)s')
+rollbar.init(os.environ['ROLLBAR_KEY'], os.environ['ENV'])
 # logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
 class Contact(Base):
@@ -740,6 +743,10 @@ class Server(Thread):
 		account = self.s.query(Account).get(self.account_id)
 		if account.off_line == False:
 			self._d('About to log in again with %s and %s' %(self.username, self.password))
+			self._d('Unscheduled outtage for this number')
+
+			rollbar.report_message('Unscheduled outage for %s' %self.username, 'warning')
+
 			self.login(self.username, self.password, self.account_id)
 		elif account.off_line == True and self.job is not None:			
 			# call the current job
@@ -930,6 +937,9 @@ man_s = man_Session()
 accounts = man_s.query(Account).filter_by(setup=True, off_line=False).all()
 if len(accounts) > 0:
 	print("Accounts : %s" % len(accounts))
+
+	# if os.environ['ENV'] == "development":
+	# stathat.ez_value(os.environ['STAT_HAT'], 'online accounts', len(accounts))
 
 	for account in accounts:
 		server = Server(database_url, True, True)		
