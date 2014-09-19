@@ -7,6 +7,9 @@ export NUMBER=""
 export LOGO="logo.png"
 export USE_REALTIME="false"
 export API_URL=""
+export ROLLBAR_KEY=""
+export ENV="development"
+export STAT_HAT="key"
 
 cd /home/wassup
 source venv/bin/activate
