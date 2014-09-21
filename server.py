@@ -73,7 +73,7 @@ class Job(Base):
 	id = Column(Integer, primary_key=True)
 
 	method = Column(String(255))
-	targets = Column(String(255))
+	targets = Column(String())
 	args = Column(String())
 	sent = Column(Boolean())
 	scheduled_time = Column(DateTime())
