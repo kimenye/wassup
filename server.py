@@ -746,7 +746,8 @@ class Server(Thread):
 			self._d('Unscheduled outtage for this number')
 
 			rollbar.report_message('Unscheduled outage for %s' %self.username, 'warning')
-
+			self._d('Going to wait for a few minutes before trying to log in again')
+			time.sleep(15)
 			self.login(self.username, self.password, self.account_id)
 		elif account.off_line == True and self.job is not None:			
 			# call the current job
