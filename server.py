@@ -745,7 +745,7 @@ class Server(Thread):
 			self._d('About to log in again with %s and %s' %(self.username, self.password))
 			self._d('Unscheduled outtage for this number')
 
-			rollbar.report_message('Unscheduled outage for %s' %self.username, 'warning')
+			rollbar.report_message('Unscheduled outage for %s - %s' %(self.username, account.name), 'warning')
 			self._d('Going to wait for a few minutes before trying to log in again')
 			time.sleep(15)
 			self.login(self.username, self.password, self.account_id)
