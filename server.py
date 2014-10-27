@@ -692,6 +692,7 @@ class Server(Thread):
 
 	def onGroupGotInfo(self,jid,owner,subject,subjectOwner,subjectTimestamp,creationTimestamp):
 		self._d("Group info %s - %s" %(jid, subject))
+		self._d("Group owner %s" %owner)
 		
 		data = { "name" : subject, "jid" : jid }
 		self._post("/update_group", data)
