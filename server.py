@@ -705,7 +705,7 @@ class Server(Thread):
 		self._d("Updated the group %s" %subject)
 
 		create_job = self.s.query(Job).filter_by(method="group_create", args=subject).first()
-		if create_job.next_job_id is not None:
+		if create_job is not None and create_job.next_job_id is not None:
 			next_job = self.s.query(Job).get(create_job.next_job_id)
 
 			self._d("Next job %s" %next_job.id)
