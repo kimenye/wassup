@@ -721,6 +721,8 @@ class Server(Thread):
 				self.s.commit()
 			else:
 				self.methodsInterface.call('group_getParticipants', (jid,))
+		else:
+			self.methodsInterface.call('group_getParticipants', (jid,))
 
 	def onGroupCreateFail(self, errorCode):
 		self._d("Error creating a group %s" %errorCode)
