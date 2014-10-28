@@ -666,6 +666,7 @@ class Server(Thread):
 		self._d("Added participant %s" %jid)
 		# check the profile pic
 		self.checkProfilePic(jid[0])
+		self._post("/update_membership", { "groupJid" : groupJid, "type": "add", "contact" : jid.split("@")[0]})
 
 	def onGroupRemoveParticipantsSuccess(self, groupJid, jid):
 		self._d("Removed participant %s" %jid)
