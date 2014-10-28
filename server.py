@@ -720,8 +720,10 @@ class Server(Thread):
 				next_job.targets = jid
 				self.s.commit()
 			else:
+				self._d("About to call get participants on %s" %jid)
 				self.methodsInterface.call('group_getParticipants', (jid,))
 		else:
+			self._d("About to call get participants on %s" %jid)
 			self.methodsInterface.call('group_getParticipants', (jid,))
 
 	def onGroupCreateFail(self, errorCode):
