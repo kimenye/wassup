@@ -308,6 +308,9 @@ class Server(Thread):
 						location = self.s.query(Location).get(job.args)
 						self.sendLocation(job.targets, location)
 						job.sent = True					
+					elif job.method == "syncGroup":
+						self.methodsInterface.call("group_getInfo", (job.args,))
+						job.sent = True
 		if acc.off_line == True and self.job == None:
 			self._d("Reconnecting")
 			
@@ -693,8 +696,9 @@ class Server(Thread):
 	def onGroupGotInfo(self,jid,owner,subject,subjectOwner,subjectTimestamp,creationTimestamp):
 		self._d("Group info %s - %s" %(jid, subject))
 		self._d("Group owner %s" %owner)
+		self._d("Subject owner %s" %subjectOwner)
 		
-		data = { "name" : subject, "jid" : jid }
+		data = { "name" : subject, "jid" : jid, "owner": owner, "subjectOwner" : subjectOwner }
 		self._post("/update_group", data)
 		self._d("Updated the group %s" %subject)
 
