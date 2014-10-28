@@ -709,12 +709,18 @@ class Server(Thread):
 			next_job = self.s.query(Job).get(create_job.next_job_id)
 
 			self._d("Next job %s" %next_job.id)
+			self._d("Next job %s" %next_job.method)
 			self._d("Next job sent? %s" %next_job.sent)
 			self._d("Next job runs? %s" %next_job.runs)
+			
+			will_run = (next_job.method == "group_addParticipants" and next_job.sent == True and next_job.runs == 0)
+			self._d("Will run? %s" %will_run)
 			if next_job.method == "group_addParticipants" and next_job.sent == True and next_job.runs == 0:
 				next_job.sent = False
 				next_job.targets = jid
 				self.s.commit()
+			else:
+				self.methodsInterface.call('group_getParticipants', (jid,))
 
 	def onGroupCreateFail(self, errorCode):
 		self._d("Error creating a group %s" %errorCode)
