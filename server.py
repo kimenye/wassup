@@ -309,6 +309,7 @@ class Server(Thread):
 						self.sendLocation(job.targets, location)
 						job.sent = True					
 					elif job.method == "syncGroup":
+						self._d("Calling group_getInfo %s" %job.args)
 						self.methodsInterface.call("group_getInfo", (job.args,))
 						job.sent = True
 		if acc.off_line == True and self.job == None:
