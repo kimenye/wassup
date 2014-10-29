@@ -308,6 +308,10 @@ class Server(Thread):
 						location = self.s.query(Location).get(job.args)
 						self.sendLocation(job.targets, location)
 						job.sent = True					
+					elif job.method == "syncGroup":
+						self._d("Calling group_getInfo %s" %job.args)
+						self.methodsInterface.call("group_getInfo", (job.args,))
+						job.sent = True
 		if acc.off_line == True and self.job == None:
 			self._d("Reconnecting")
 			
@@ -662,6 +666,7 @@ class Server(Thread):
 		self._d("Added participant %s" %jid)
 		# check the profile pic
 		self.checkProfilePic(jid[0])
+		self._post("/update_membership", { "groupJid" : groupJid, "type": "add", "contact" : jid.split("@")[0]})
 
 	def onGroupRemoveParticipantsSuccess(self, groupJid, jid):
 		self._d("Removed participant %s" %jid)
@@ -693,22 +698,33 @@ class Server(Thread):
 	def onGroupGotInfo(self,jid,owner,subject,subjectOwner,subjectTimestamp,creationTimestamp):
 		self._d("Group info %s - %s" %(jid, subject))
 		self._d("Group owner %s" %owner)
+		self._d("Subject owner %s" %subjectOwner)
 		
-		data = { "name" : subject, "jid" : jid }
+		data = { "name" : subject, "jid" : jid, "owner": owner, "subjectOwner" : subjectOwner }
 		self._post("/update_group", data)
 		self._d("Updated the group %s" %subject)
 
 		create_job = self.s.query(Job).filter_by(method="group_create", args=subject).first()
-		if create_job.next_job_id is not None:
+		if create_job is not None and create_job.next_job_id is not None:
 			next_job = self.s.query(Job).get(create_job.next_job_id)
 
 			self._d("Next job %s" %next_job.id)
+			self._d("Next job %s" %next_job.method)
 			self._d("Next job sent? %s" %next_job.sent)
 			self._d("Next job runs? %s" %next_job.runs)
+			
+			will_run = (next_job.method == "group_addParticipants" and next_job.sent == True and next_job.runs == 0)
+			self._d("Will run? %s" %will_run)
 			if next_job.method == "group_addParticipants" and next_job.sent == True and next_job.runs == 0:
 				next_job.sent = False
 				next_job.targets = jid
 				self.s.commit()
+			else:
+				self._d("About to call get participants on %s" %jid)
+				self.methodsInterface.call('group_getParticipants', (jid,))
+		else:
+			self._d("About to call get participants on %s" %jid)
+			self.methodsInterface.call('group_getParticipants', (jid,))
 
 	def onGroupCreateFail(self, errorCode):
 		self._d("Error creating a group %s" %errorCode)
