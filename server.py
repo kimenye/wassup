@@ -32,6 +32,7 @@ class Message(Base):
 	__tablename__ = 'messages'
 	id = Column(Integer, primary_key=True)
 	received = Column(Boolean())
+	whatsapp_message_id = Column(String(255))
 	receipt_timestamp = Column(DateTime())
 
 	def __init__(self, received):
@@ -344,6 +345,10 @@ class Server(Thread):
 		args = args.split(",")
 		asset_id = args[0]
 		return self.s.query(Asset).get(asset_id)
+
+	def _messageExists(self, whatsapp_message_id):
+		message = session.query(Message).filter_by(whatsapp_message_id=whatsapp_message_id).scalar()
+		return message is not None
 
 	def _sendRealtime(self, message):
 		if self.use_realtime:
@@ -817,16 +822,19 @@ class Server(Thread):
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 		
-		data = { "message" : { "text" : content, "group_jid" : jid, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName, "jid" : author }}
-		self._post("/receive_broadcast", data)
+		if self._messageExists(messageId) == False:
+			data = { "message" : { "text" : content, "group_jid" : jid, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName, "jid" : author }}
+			self._post("/receive_broadcast", data)
 
-		self.checkProfilePic(author)
-		self._sendRealtime({
-			'type' : 'text',
-			'phone_number' : jid,
-			'text' : content,
-			'name' : pushName
-		})
+			self.checkProfilePic(author)
+			self._sendRealtime({
+				'type' : 'text',
+				'phone_number' : jid,
+				'text' : content,
+				'name' : pushName
+			})
+		else:
+			rollbar.report_message('Duplicate group message (%s) %s - %s' %(messageId, self.username, account.name), 'warning')
 
 	def _patch(self,url,data):
 		data.update(account = self.username)
@@ -845,17 +853,20 @@ class Server(Thread):
 		if wantsReceipt and self.sendReceipts:
 			self.methodsInterface.call("message_ack", (jid, messageId))
 		
-		data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName  }}
-		self._post("/messages", data)
+		if self._messageExists(messageId) == False:
+			data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName  }}
+			self._post("/messages", data)
 
-		self._sendRealtime({
-			'type' : 'text',
-			'phone_number' : phone_number,
-			'text' : messageContent,
-			'name' : pushName
-		})
-		
-		self.checkProfilePic(jid)
+			self._sendRealtime({
+				'type' : 'text',
+				'phone_number' : phone_number,
+				'text' : messageContent,
+				'name' : pushName
+			})
+			
+			self.checkProfilePic(jid)
+		else:
+			rollbar.report_message('Duplicate message (%s) %s - %s' %(messageId, self.username, account.name), 'warning')
 
 	def onLocationReceived(self, messageId, jid, name, preview, latitude, longitude, wantsReceipt, isBroadcast):
 		self._d('Location Received')	
