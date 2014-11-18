@@ -1,3 +1,4 @@
+
 '''
 Copyright (c) <2012> Tarek Galal <tare2.galal@gmail.com>
 
@@ -50,13 +51,13 @@ class Constants:
 	port = 443
 	domain = "s.whatsapp.net"
 
-	v="0.81"
+	v="0.90"
 
 	tokenData = {
-		"v": "2.12.10",
-		"r": "S40-2.12.10",
-		"u": "WhatsApp/2.12.10 S40Version/14.26 Device/Nokia302",
-		"t": "PdA2DJyKoUrwLw1Bg6EIhzh502dF9noR9uFCllGk1386883946914{phone}",
+		"v": "2.12.49",
+		"r": "S40-2.12.49",
+		"u": "WhatsApp/2.12.49 S40Version/14.26 Device/Nokia302",
+		"t": "PdA2DJyKoUrwLw1Bg6EIhzh502dF9noR9uFCllGk1413401214298{phone}",
 		"d": "Nokia302"
 	}
 
