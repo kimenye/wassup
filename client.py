@@ -28,7 +28,7 @@ class Client:
 
 	def init_db(self):
 		url = os.environ['SQLALCHEMY_DATABASE_URI']
-		self.db = create_engine(url, echo=False, pool_size=3, pool_timeout=600,pool_recycle=300)
+		self.db = create_engine(url, echo=False, pool_size=5, pool_timeout=600,pool_recycle=600)
 		self.s = sessionmaker(bind=self.db)
 		self.session = self.s()
 
@@ -44,6 +44,7 @@ class Client:
 		self.signalsInterface.registerListener("auth_fail", self._onAuthFailed)
 		self.signalsInterface.registerListener("disconnected", self._onDisconnected)
 		self.signalsInterface.registerListener("message_received", self._onMessageReceived)
+		self.signalsInterface.registerListener("group_messageReceived", self._onGroupMessageReceived)
 
 	# util methods
 
@@ -69,6 +70,9 @@ class Client:
 	def _d(self, message):
 		self.logger.debug(message)
 
+	def _i(self, message):
+		self.logger.info(message)
+
 	def _e(self, message):
 		self.logger.error(message)
 
@@ -76,6 +80,23 @@ class Client:
 		self.logger.warning(message)
 
 	# signals
+
+	def _onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
+		self._i('Received a message on the group %s' %content)
+		self._i('JID %s - %s - %s' %(jid, pushName, author))
+		
+		if self._messageExists(messageId) == False:
+
+			# Always send receipts
+			self.methodsInterface.call("message_ack", (jid, messageId))
+			
+			# Post to server
+			data = { "message" : { "text" : content, "group_jid" : jid, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName, "jid" : author }}
+			self._post("/receive_broadcast", data)
+
+		else:
+			self._w("Duplicate group message (%s) %s - %s" %(messageId, self.phone_number, self.account.name))
+			rollbar.report_message('Duplicate group message (%s) %s - %s' %(messageId, self.phone_number, self.account.name), 'warning')
 
 	def _onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadcast):
 		self.logger.debug("Received message %s from %s - %s" %(messageContent, get_phone_number(jid), pushName))

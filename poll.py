@@ -16,8 +16,12 @@ from util import error_message, setup_logging
 from client import Client
 
 
-if len(sys.argv) == 2:
+# print sys.argv
+if len(sys.argv) >= 2:
 	phone_number = sys.argv[1]
+	timeout = int(sys.argv[2])
+
+
 	env = os.environ['ENV']		
 	
 	logger = setup_logging(phone_number, env)
@@ -37,7 +41,7 @@ if len(sys.argv) == 2:
 			runtime = int(now - start)
 			logger.info("Been running for %s seconds" %(runtime))
 			time.sleep(5)
-			poll = runtime < 15
+			poll = runtime < timeout
 
 	else:
 		error_message("Called poll script un setup account %s" %phone_number)
