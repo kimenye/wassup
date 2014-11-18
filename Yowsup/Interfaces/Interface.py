@@ -75,19 +75,32 @@ class SignalInterfaceBase(object):
 			"notification_groupParticipantAdded",
 			"notification_groupParticipantRemoved",
 			"notification_removedFromGroup",
+			"notification_contactAdded",
 
 			"contact_gotProfilePictureId",
 			"contact_gotProfilePicture",
 			"contact_typing",
 			"contact_paused",
+			"contact_statusReceived",
 			
 			"profile_setPictureSuccess",
 			"profile_setPictureError",
 			"profile_setStatusSuccess",
+			
+			"sync_gotSyncResult",
 
 			"ping",
 			"pong",
 			"disconnected",
+
+			"subscription_link",
+
+			"privacy_listReceived",
+
+			"privacy_settingsReceived",
+
+			"sync_contactsReceived",
+			"sync_statusesReceived",
 			
 			"media_uploadRequestSuccess",
 			"media_uploadRequestFailed",
@@ -201,6 +214,7 @@ class MethodInterfaceBase(object):
 			"profile_setPicture",
 			"profile_setStatus",
 
+			"sync_sendSync",
 			
 			"ready",
 			"disconnect",
