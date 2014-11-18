@@ -125,7 +125,8 @@ class Server(Thread):
 		self.pubnub = Pubnub(os.environ['PUB_KEY'], os.environ['SUB_KEY'], None, False)
 
 		self.timeout = int(os.getenv('TIMEOUT', 3600))
-		connectionManager = YowsupConnectionManager(self.timeout)
+		# connectionManager = YowsupConnectionManager(self.timeout)
+		connectionManager = YowsupConnectionManager()
 
 		connectionManager.setAutoPong(keepAlive)		
 
@@ -347,7 +348,7 @@ class Server(Thread):
 		return self.s.query(Asset).get(asset_id)
 
 	def _messageExists(self, whatsapp_message_id):
-		message = session.query(Message).filter_by(whatsapp_message_id=whatsapp_message_id).scalar()
+		message = self.s.query(Message).filter_by(whatsapp_message_id=whatsapp_message_id).scalar()
 		return message is not None
 
 	def _sendRealtime(self, message):
@@ -403,12 +404,13 @@ class Server(Thread):
 			url = "/contacts/%s" %contact.id
 			self._patch(url, { "contact" : { "last_seen" : str(datetime.now()) } })
 
-	def onPresenceUnavailable(self, jid, last):
+	def onPresenceUnavailable(self, jid):
 		self._d("JID unavilable %s" %jid)
 		self._d("Last seen is %s" %last)
 
-		if last == "deny":
-			self._d("this number %s has blocked you" %jid)
+		# TODO: removed last seen variable
+		# if last == "deny":
+		# 	self._d("this number %s has blocked you" %jid)
 
 
 	def onUploadRequestDuplicate(self,_hash, url):
@@ -967,18 +969,19 @@ accounts = man_s.query(Account).filter_by(setup=True, off_line=False).all()
 if len(accounts) > 0:
 	print("Accounts : %s" % len(accounts))
 
-	# if os.environ['ENV'] == "development":
-	# stathat.ez_value(os.environ['STAT_HAT'], 'online accounts', len(accounts))
+# 	# if os.environ['ENV'] == "development":
+# 	# stathat.ez_value(os.environ['STAT_HAT'], 'online accounts', len(accounts))
 
 	for account in accounts:
 		server = Server(database_url, True, True)		
+		print("Account %s" %account.phone_number)
 		server.login(account.phone_number, base64.b64decode(bytes(account.whatsapp_password.encode('utf-8'))), account.id)
 		server.start()
 
 # server = Server(database_url,True, True)
 # login = os.environ['TEL_NUMBER']
-# password = os.environ['PASS']
+# password = os.environ['PASSWORD']
 # password = base64.b64decode(bytes(password.encode('utf-8')))
-# server.login(login, password)
+# server.login(login, password, 16)
 
 

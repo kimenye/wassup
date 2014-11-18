@@ -6,6 +6,8 @@ venv/lib
 venv
 logs
 tmp
+Examples
+yowsup-test2
 
 # Python Packages
 *.egg

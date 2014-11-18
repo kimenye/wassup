@@ -74,7 +74,6 @@ class SignalInterfaceBase(object):
 			"notification_groupPictureRemoved",
 			"notification_groupParticipantAdded",
 			"notification_groupParticipantRemoved",
-			"notification_removedFromGroup",
 			"notification_contactAdded",
 
 			"contact_gotProfilePictureId",
