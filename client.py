@@ -39,6 +39,9 @@ class Client:
 		self.logger.info("Connecting")		
 		self.methodsInterface.call("auth_login", (self.phone_number, base64.b64decode(bytes(self.account.whatsapp_password.encode('utf-8')))))
 
+	def disconnect(self):
+		self._setStatus(1, "Disconected!")
+
 	def _registerListeners(self):
 		self.signalsInterface.registerListener("auth_success", self._onAuthSuccess)
 		self.signalsInterface.registerListener("auth_fail", self._onAuthFailed)

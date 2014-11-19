@@ -20,7 +20,7 @@ if len(sys.argv) >= 2:
 	timeout = int(sys.argv[2])
 	debug = False
 	if len(sys.argv) > 3:
-		debug = bool(sys.argv[3])
+		debug = sys.argv[3] == "True"
 
 
 
@@ -34,17 +34,20 @@ if len(sys.argv) >= 2:
 	client = Client(phone_number, logger)
 
 	if client.account.setup == True:
-		if debug == True:
+		if debug == False:
 			client.connect()
 
 		poll = True
 		start = time.time()
 		while (poll):
 			now = time.time()
-			runtime = int(now - start)
-			logger.info("Been running for %s seconds" %(runtime))
+			runtime = int(now - start)			
 			time.sleep(5)
+			logger.info("Disconnecting in %s seconds" %(timeout - runtime))
 			poll = runtime < timeout
+
+		logger.info("Complete!")
+		client.disconnect()
 
 	else:
 		error_message("Called poll script un setup account %s" %phone_number)
