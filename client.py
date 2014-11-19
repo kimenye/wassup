@@ -55,6 +55,7 @@ class Client:
 		self.signalsInterface.registerListener("message_received", self._onMessageReceived)
 		self.signalsInterface.registerListener("group_messageReceived", self._onGroupMessageReceived)
 		self.signalsInterface.registerListener("receipt_messageDelivered", self._onReceiptMessageDelivered)
+		self.signalsInterface.registerListener("image_received", self._onImageReceived)
 
 	def work(self):
 		if self.connected:
@@ -146,6 +147,23 @@ class Client:
 		self.logger.warning(message)
 
 	# signals
+
+	def _onImageReceived(self, messageId, jid, preview, url, size, wantsReceipt, isBroadCast):	
+		self._d('Image Received')	
+		phone_number = get_phone_number(jid)
+
+		data = { "message" : { 'url' : url, 'message_type' : 'Image' , 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
+		self._post("/upload", data)
+
+		# send receipts
+		self.methodsInterface.call("message_ack", (jid, messageId))
+
+		self._sendRealtime({
+			'type' : 'image',
+			'phone_number' : phone_number,
+			'url' : url,
+			'name' : ''
+		})
 
 	def _onReceiptMessageDelivered(self, jid, messageId):
 		self._d("Delivered %s from %s" %(messageId, jid))		
