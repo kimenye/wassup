@@ -1457,10 +1457,11 @@ class ReaderThread(threading.Thread):
 			pass
 
 		pushName = None
-		notifNode = messageNode.getChild("notify")
-		if notifNode is not None:
-			pushName = notifNode.getAttributeValue("name");
+		notifNode = messageNode.getAttributeValue("notify") is not None
 
+		if notifNode:
+			pushName = messageNode.getAttributeValue("notify");
+		
 
 		msgId = messageNode.getAttributeValue("id");
 

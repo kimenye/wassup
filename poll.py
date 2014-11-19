@@ -51,6 +51,7 @@ if len(sys.argv) >= 2:
 
 	else:
 		error_message("Called poll script un setup account %s" %phone_number)
+		sys.exit(2)
 else:
 	error_message("Called poll script without a phone number", "error")
 	sys.exit(1)

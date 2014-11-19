@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from pubnub import Pubnub
 
 import os, base64, requests, json
 
@@ -25,6 +26,7 @@ class Client:
 		self.methodsInterface = self.connectionManager.getMethodsInterface()
 
 		self._registerListeners()
+		self._initRealtime()
 
 	def init_db(self):
 		url = os.environ['SQLALCHEMY_DATABASE_URI']
@@ -49,6 +51,8 @@ class Client:
 		self.signalsInterface.registerListener("message_received", self._onMessageReceived)
 		self.signalsInterface.registerListener("group_messageReceived", self._onGroupMessageReceived)
 
+	# def work
+
 	# util methods
 
 	def _post(self, url, data):
@@ -69,6 +73,20 @@ class Client:
 	def _messageExists(self, whatsapp_message_id):
 		message = self.session.query(Message).filter_by(whatsapp_message_id=whatsapp_message_id, account_id=self.account.id).scalar()
 		return message is not None
+
+	def _sendRealtime(self, message):
+		if self.use_realtime:
+			self.pubnub.publish({
+				'channel' : self.channel,
+				'account' : self.phone_number,
+				'message' : message
+			})
+
+	def _initRealtime(self):
+		self.channel = os.environ['PUB_CHANNEL'] + "_%s" %self.phone_number
+		self.use_realtime = True
+		self.pubnub = Pubnub(os.environ['PUB_KEY'], os.environ['SUB_KEY'], None, False)
+
 
 	def _d(self, message):
 		self.logger.debug(message)
@@ -102,15 +120,23 @@ class Client:
 			rollbar.report_message('Duplicate group message (%s) %s - %s' %(messageId, self.phone_number, self.account.name), 'warning')
 
 	def _onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadcast):
-		self.logger.debug("Received message %s from %s - %s" %(messageContent, get_phone_number(jid), pushName))
+		phone_number = get_phone_number(jid)
+		self.logger.debug("Received message %s from %s - %s" %(messageContent, phone_number, pushName))
 		if self._messageExists(messageId) == False:
 			
 			# Always send receipts
 			self.methodsInterface.call("message_ack", (jid, messageId))
 
 			# Post to server
-			data = { "message" : { "text" : messageContent, "phone_number" : get_phone_number(jid), "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName  }}
+			data = { "message" : { "text" : messageContent, "phone_number" : phone_number, "message_type" : "Text", "whatsapp_message_id" : messageId, "name" : pushName  }}
 			self._post("/messages", data)
+
+			self._sendRealtime({
+				'type' : 'text',
+				'phone_number' : phone_number,
+				'text' : messageContent,
+				'name' : pushName
+			})
 		else:
 			self._w("Duplicate message %s" %messageId)			
 
