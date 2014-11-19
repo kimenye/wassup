@@ -42,6 +42,7 @@ if len(sys.argv) >= 2:
 		while (poll):
 			now = time.time()
 			runtime = int(now - start)			
+			client.work()
 			time.sleep(5)
 			logger.info("Disconnecting in %s seconds" %(timeout - runtime))
 			poll = runtime < timeout

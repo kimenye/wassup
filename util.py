@@ -1,7 +1,5 @@
-import os
-import rollbar
-import logging
-
+import os, rollbar, logging
+from datetime import datetime, timedelta
 
 rollbar.init(os.environ['ROLLBAR_KEY'], os.environ['ENV'])
 
@@ -33,3 +31,9 @@ def setup_logging(phone_number, env):
 def get_phone_number(jid):
 	phone_number = jid.split("@")[0]
 	return phone_number
+
+def utc_to_local(utc_dt):		
+	timestamp = calendar.timegm(utc_dt.timetuple())
+	local_dt = datetime.fromtimestamp(timestamp)
+	assert utc_dt.resolution >= timedelta(microseconds=1)
+	return local_dt.replace(microsecond=utc_dt.microsecond)

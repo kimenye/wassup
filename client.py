@@ -1,13 +1,14 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from pubnub import Pubnub
+from datetime import datetime
 
 import os, base64, requests, json
 
 from Yowsup.connectionmanager import YowsupConnectionManager
 
 from models import Account, Message, Job
-from util import get_phone_number, error_message
+from util import get_phone_number, error_message, utc_to_local
 
 
 class Client:
@@ -32,14 +33,17 @@ class Client:
 		url = os.environ['SQLALCHEMY_DATABASE_URI']
 		self.db = create_engine(url, echo=False, pool_size=5, pool_timeout=600,pool_recycle=600)
 		self.s = sessionmaker(bind=self.db)
-		self.session = self.s()
+		# self.session = self.s()
 
-		self.account = self.session.query(Account).filter_by(phone_number = self.phone_number).scalar()
+		_session = self.s()
+		self.account = _session.query(Account).filter_by(phone_number = self.phone_number).scalar()
+		_session.commit()
 		self.password = self.account.whatsapp_password
 
 	def connect(self):
 		self.logger.info("Connecting")		
 		self.methodsInterface.call("auth_login", (self.phone_number, base64.b64decode(bytes(self.account.whatsapp_password.encode('utf-8')))))
+		self.connected = True
 
 	def disconnect(self):
 		self._setStatus(1, "Disconected!")
@@ -50,12 +54,44 @@ class Client:
 		self.signalsInterface.registerListener("disconnected", self._onDisconnected)
 		self.signalsInterface.registerListener("message_received", self._onMessageReceived)
 		self.signalsInterface.registerListener("group_messageReceived", self._onGroupMessageReceived)
+		self.signalsInterface.registerListener("receipt_messageDelivered", self._onReceiptMessageDelivered)
 
-	def work:
+	def work(self):
 		if self.connected:
-			self._i("About to begin work")
-			jobs = self.s.query(Job).filter_by(sent=False, account_id=self.account.id, pending=False).all()
+			self._i("About to begin work - sent: %s, account_id: %s, pending: %s" %(False, self.account.id, False))
+			_session = self.s()
+			jobs = _session.query(Job).filter_by(sent=False, account_id=self.account.id, pending=False).all()
+			self._i("Number of jobs %s" % len(jobs))
+			
 
+			for job in jobs:
+				self._d("Processing job %s" %job.method)
+				if self._onSchedule(job.scheduled_time):
+					self._i("Job %s-%s can run" %(job.id, job.method))
+					self._do(job)
+
+			_session.commit()
+
+	# work methods
+
+	def _do(self,job):
+		success = False
+		if job.method == "sendMessage":
+			success = self._sendMessage(job)
+
+		if success:
+			job.sent = success
+			job.runs += 1
+
+			# self.session.commit()
+
+	def _sendMessage(self, job):
+		to = job.targets
+		text = job.args
+		self._d("Sending %s to %s" %(text, to))
+		message_id = self.methodsInterface.call("message_send", (to, text))	
+		job.whatsapp_message_id = message_id
+		return True
 
 	# util methods
 
@@ -75,7 +111,9 @@ class Client:
 		self._post("/status", data)
 
 	def _messageExists(self, whatsapp_message_id):
-		message = self.session.query(Message).filter_by(whatsapp_message_id=whatsapp_message_id, account_id=self.account.id).scalar()
+		_session = self.s()
+		message = _session.query(Message).filter_by(whatsapp_message_id=whatsapp_message_id, account_id=self.account.id).scalar()
+		_session.commit()
 		return message is not None
 
 	def _sendRealtime(self, message):
@@ -91,6 +129,10 @@ class Client:
 		self.use_realtime = True
 		self.pubnub = Pubnub(os.environ['PUB_KEY'], os.environ['SUB_KEY'], None, False)
 
+	def _onSchedule(self,scheduled_time):
+		return (scheduled_time is None or datetime.now() > utc_to_local(scheduled_time))
+
+
 	def _d(self, message):
 		self.logger.debug(message)
 
@@ -104,6 +146,34 @@ class Client:
 		self.logger.warning(message)
 
 	# signals
+
+	def _onReceiptMessageDelivered(self, jid, messageId):
+		self._d("Delivered %s from %s" %(messageId, jid))		
+				
+		_session = self.s()
+		job = _session.query(Job).filter_by(sent=True, whatsapp_message_id=messageId, account_id=self.account.id).scalar()
+		if job is not None:
+			job.received = True
+			# self.session.commit()
+
+			if job.method == "sendMessage":
+				m = _session.query(Message).get(job.message_id)
+				self._d("Looking for message with id to send a receipt %s" %job.message_id)
+				if m is not None:
+					m.received = True
+					m.receipt_timestamp = datetime.now()
+															
+					data = { "receipt" : { "message_id" : m.id } }
+					self._post("/receipt", data)
+
+					self._sendRealtime({
+						'type' : 'receipt',
+						'message_id': m.id
+					})
+			else:
+				data = { "receipt" : { "message_id" : messageId, "phone_number" : jid.split("@")[0] } }
+				self._post("/broadcast_receipt", data)
+		_session.commit()
 
 	def _onGroupMessageReceived(self, messageId, jid, author, content, timestamp, wantsReceipt, pushName):
 		self._i('Received a message on the group %s' %content)
@@ -142,9 +212,7 @@ class Client:
 			})
 		else:
 			self._w("Duplicate message %s" %messageId)			
-
-				
-
+		
 	def _onAuthSuccess(self, username):
 		self.logger.info("Auth Success! - %s" %username)
 		self.methodsInterface.call("ready")
@@ -158,6 +226,6 @@ class Client:
 		self._post("/wa_auth_error", {})
 
 	def _onDisconnected(self, reason):
-		self.logger.error("Disconected! - %s, %s" %(self.username, reason))
+		self._e("Disconected! - %s, %s" %(self.phone_number, reason))
 		self.connected = False
 		error_message("Unscheduled disconnect for %s" %self.phone_number, "warning")
