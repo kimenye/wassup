@@ -6,8 +6,8 @@ import os, base64, requests, json
 
 from Yowsup.connectionmanager import YowsupConnectionManager
 
-from models import Account, Message
-from util import get_phone_number
+from models import Account, Message, Job
+from util import get_phone_number, error_message
 
 
 class Client:
@@ -51,7 +51,11 @@ class Client:
 		self.signalsInterface.registerListener("message_received", self._onMessageReceived)
 		self.signalsInterface.registerListener("group_messageReceived", self._onGroupMessageReceived)
 
-	# def work
+	def work:
+		if self.connected:
+			self._i("About to begin work")
+			jobs = self.s.query(Job).filter_by(sent=False, account_id=self.account.id, pending=False).all()
+
 
 	# util methods
 
@@ -87,7 +91,6 @@ class Client:
 		self.use_realtime = True
 		self.pubnub = Pubnub(os.environ['PUB_KEY'], os.environ['SUB_KEY'], None, False)
 
-
 	def _d(self, message):
 		self.logger.debug(message)
 
@@ -121,7 +124,7 @@ class Client:
 
 	def _onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadcast):
 		phone_number = get_phone_number(jid)
-		self.logger.debug("Received message %s from %s - %s" %(messageContent, phone_number, pushName))
+		self._d("Received message %s from %s - %s" %(messageContent, phone_number, pushName))
 		if self._messageExists(messageId) == False:
 			
 			# Always send receipts
@@ -148,6 +151,7 @@ class Client:
 		self.methodsInterface.call("clientconfig_send")
 		self.methodsInterface.call("presence_sendAvailable", ())
 		self._setStatus(1)
+		self.connected = True
 
 	def _onAuthFailed(self, username, err):
 		self.logger.error("Auth error! - %s. Using %s with %s " %(err, username, self.password))
@@ -155,3 +159,5 @@ class Client:
 
 	def _onDisconnected(self, reason):
 		self.logger.error("Disconected! - %s, %s" %(self.username, reason))
+		self.connected = False
+		error_message("Unscheduled disconnect for %s" %self.phone_number, "warning")
