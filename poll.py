@@ -5,8 +5,6 @@ from Yowsup.Common.utilities import Utilities
 from Yowsup.Media.uploader import MediaUploader
 import os, json, base64, time, requests, hashlib, datetime, logging, vobject, thread, calendar
 
-
-
 from datetime import datetime, timedelta
 from pubnub import Pubnub
 import rollbar
@@ -20,19 +18,24 @@ from client import Client
 if len(sys.argv) >= 2:
 	phone_number = sys.argv[1]
 	timeout = int(sys.argv[2])
+	debug = False
+	if len(sys.argv) > 3:
+		debug = bool(sys.argv[3])
+
 
 
 	env = os.environ['ENV']		
 	
 	logger = setup_logging(phone_number, env)
-	logger.info("Ready to go with %s" %phone_number)
+	logger.info("Ready to go with %s - Debug %s" %(phone_number, debug))
 
 	rollbar.init(os.environ['ROLLBAR_KEY'], env)
 
 	client = Client(phone_number, logger)
 
 	if client.account.setup == True:
-		client.connect()
+		if debug == True:
+			client.connect()
 
 		poll = True
 		start = time.time()

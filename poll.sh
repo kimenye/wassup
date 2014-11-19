@@ -7,7 +7,8 @@ export ENV="development"
 
 account="$1"
 timeout="$2"
+debug="$3"
 
 
 source venv/bin/activate
-python poll.py "$account" "$timeout"
+python poll.py "$account" "$timeout" "$debug"
