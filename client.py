@@ -56,6 +56,8 @@ class Client:
 		self.signalsInterface.registerListener("group_messageReceived", self._onGroupMessageReceived)
 		self.signalsInterface.registerListener("receipt_messageDelivered", self._onReceiptMessageDelivered)
 		self.signalsInterface.registerListener("image_received", self._onImageReceived)
+		self.signalsInterface.registerListener("location_received", self._onLocationReceived)
+
 
 	def work(self):
 		if self.connected:
@@ -147,6 +149,16 @@ class Client:
 		self.logger.warning(message)
 
 	# signals
+
+	def _onLocationReceived(self, messageId, jid, name, preview, latitude, longitude, wantsReceipt, isBroadcast):
+		self._d('Location Received')	
+		phone_number = get_phone_number(jid)
+
+		# send receipts
+		self.methodsInterface.call("message_ack", (jid, messageId))
+
+		data = { "location" : { 'latitude' : latitude, 'longitude': longitude, 'preview' : preview, 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : name } }
+		self._post("/locations", data)
 
 	def _onImageReceived(self, messageId, jid, preview, url, size, wantsReceipt, isBroadCast):	
 		self._d('Image Received')	
