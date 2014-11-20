@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from pubnub import Pubnub
 from datetime import datetime
 
-import os, base64, requests, json
+import os, base64, requests, json, vobject
 
 from Yowsup.connectionmanager import YowsupConnectionManager
 
@@ -81,6 +81,8 @@ class Client:
 		success = False
 		if job.method == "sendMessage":
 			success = self._sendMessage(job)
+		elif job.method == "sendContact":
+			success = self._sendVCard(job.targets, job.args)
 
 		if success:
 			job.sent = success
@@ -94,6 +96,53 @@ class Client:
 		self._d("Sending %s to %s" %(text, to))
 		message_id = self.methodsInterface.call("message_send", (to, text))	
 		job.whatsapp_message_id = message_id
+		return True
+
+	def _sendVCard(self, target, args):		
+		card = vobject.vCard()
+		params = args.split(",")
+		family_name = params[0]
+		given_name = params[1]
+		name = family_name + " " + given_name
+
+		card.add('fn')
+		card.fn.value = name
+
+		card.add('n')
+		card.n.value = vobject.vcard.Name(family=family_name, given=given_name)
+
+		api_url = self.url  + "/api/v1/base/status?token=%s" %self.account.auth_token
+		headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
+		r = requests.get(api_url, headers=headers)
+		response = r.json()
+		
+		del params[0]
+		del params[0]		
+
+		for number in params:
+			tel = number.split(":")
+			num = card.add('tel')
+			num.value = tel[1]
+			num.type_param = tel[0]
+
+		self._d("Response is %s" %response)
+		if response['profile_pic'] != self.url + '/blank-profile.png':			
+			tb = open('tmp/profile_thumb.jpg', 'wb')
+			tb.write(requests.get(response['profile_pic']).content)
+			tb.close()
+
+			f = open('tmp/profile_thumb.jpg', 'r')
+			stream = base64.b64encode(f.read())
+			f.close()
+
+			card.add('photo')
+			card.photo.value = stream
+			card.photo.type_param = "JPEG"
+			# card.photo.encoding_param = "b"
+
+
+		self._d("Data %s" %card.serialize())
+		self.methodsInterface.call("message_vcardSend", (target, card.serialize(), name))
 		return True
 
 	# util methods
