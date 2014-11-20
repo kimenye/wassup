@@ -46,7 +46,7 @@ class Client:
 		self.connected = True
 
 	def disconnect(self):
-		self._setStatus(1, "Disconected!")
+		self._setStatus(0, "Disconected!")
 
 	def _registerListeners(self):
 		self.signalsInterface.registerListener("auth_success", self._onAuthSuccess)
