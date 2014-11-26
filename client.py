@@ -58,7 +58,7 @@ class Client:
 		self.signalsInterface.registerListener("image_received", self._onImageReceived)
 		self.signalsInterface.registerListener("location_received", self._onLocationReceived)
 		self.signalsInterface.registerListener("group_subjectReceived", self._onGroupSubjectReceived)
-		# self.signalsInterface.registerListener("group_gotParticipants", self._onGotGroupParticipants)
+		self.signalsInterface.registerListener("video_received", self._onVideoReceived)
 
 
 	def work(self):
@@ -246,6 +246,19 @@ class Client:
 			'url' : url,
 			'name' : ''
 		})
+
+	def _onVideoReceived(self, messageId, jid, mediaPreview, mediaUrl, mediaSize, wantsReceipt, isBroadcast):
+		self._i("Video Received %s" %messageId)
+		self._i("From %s" %jid)
+		self._i("url: %s" %mediaUrl)
+
+		# Send a receipt regardless of whether it was a successful upload		
+		self.methodsInterface.call("message_ack", (jid, messageId))
+
+		phone_number = jid.split("@")[0]
+		data = { "message" : { 'url' : mediaUrl, 'message_type' : 'Video', 'phone_number' : phone_number, "whatsapp_message_id" : messageId, 'name' : '' } }
+		self._post("/upload", data)
+		
 
 	def _onReceiptMessageDelivered(self, jid, messageId):
 		self._d("Delivered %s from %s" %(messageId, jid))		
