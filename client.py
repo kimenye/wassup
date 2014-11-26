@@ -57,6 +57,8 @@ class Client:
 		self.signalsInterface.registerListener("receipt_messageDelivered", self._onReceiptMessageDelivered)
 		self.signalsInterface.registerListener("image_received", self._onImageReceived)
 		self.signalsInterface.registerListener("location_received", self._onLocationReceived)
+		self.signalsInterface.registerListener("group_subjectReceived", self._onGroupSubjectReceived)
+		# self.signalsInterface.registerListener("group_gotParticipants", self._onGotGroupParticipants)
 
 
 	def work(self):
@@ -83,6 +85,8 @@ class Client:
 			success = self._sendMessage(job)
 		elif job.method == "sendContact":
 			success = self._sendVCard(job.targets, job.args)
+		else: 			
+			success = True
 
 		if success:
 			job.sent = success
@@ -145,6 +149,7 @@ class Client:
 		self.methodsInterface.call("message_vcardSend", (target, card.serialize(), name))
 		return True
 
+	
 	# util methods
 
 	def _post(self, url, data):
@@ -198,6 +203,22 @@ class Client:
 		self.logger.warning(message)
 
 	# signals
+
+	def _onGotGroupParticipants(self, groupJid, jids):
+		self._d("Got group participants")
+
+		data = { "groupJid" : groupJid, "jids" : jids }
+		self._post("/groups/update_membership", data)
+
+	def _onGroupSubjectReceived(self, messageId,jid,author,subject,timestamp,receiptRequested):
+		self._d("Group subject received - %s - %s" %(subject, jid))
+
+		if receiptRequested:
+			self.methodsInterface.call("message_ack", (jid, messageId))
+
+		data = { "name" : subject, "group_type" : "External", "jid" : jid }
+		self._post("/groups", data)
+		# self._d("Updated the group")
 
 	def _onLocationReceived(self, messageId, jid, name, preview, latitude, longitude, wantsReceipt, isBroadcast):
 		self._d('Location Received')	
