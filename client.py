@@ -85,6 +85,8 @@ class Client:
 			success = self._sendMessage(job)
 		elif job.method == "sendContact":
 			success = self._sendVCard(job.targets, job.args)
+		elif job.method == "broadcast_Text":
+			success = self._sendBroadcast(job)
 		else: 			
 			success = True
 
@@ -149,7 +151,14 @@ class Client:
 		self.methodsInterface.call("message_vcardSend", (target, card.serialize(), name))
 		return True
 
-	
+	def _sendBroadcast(self, job):
+		jids = job.targets.split(",")
+		targets = []
+		for jid in jids:
+			targets.append("%s@s.whatsapp.net" %jid)
+		job.whatsapp_message_id = self.methodsInterface.call("message_broadcast", (targets, job.args, ))
+		return True
+
 	# util methods
 
 	def _post(self, url, data):
