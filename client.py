@@ -316,7 +316,7 @@ class Client:
 
 	def _onMessageReceived(self, messageId, jid, messageContent, timestamp, wantsReceipt, pushName, isBroadcast):
 		phone_number = get_phone_number(jid)
-		self._d("Received message %s from %s - %s" %(messageContent, phone_number, pushName))
+		self._i("Received message %s from %s - %s" %(messageContent, phone_number, pushName))
 		if self._messageExists(messageId) == False:
 			
 			# Always send receipts
