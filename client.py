@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from pubnub import Pubnub
 from datetime import datetime
+import rollbar
 
 import os, base64, time, requests, json, vobject
 
@@ -19,6 +20,7 @@ class Client(Thread):
 		self.logger = logger
 		self.timeout = timeout
 		self.url = os.environ['URL']
+		rollbar.init(os.environ['ROLLBAR_KEY'], os.environ['ENVIRONMENT'])
 
 		self.init_db()
 
