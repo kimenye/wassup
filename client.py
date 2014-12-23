@@ -20,7 +20,7 @@ class Client(Thread):
 		self.logger = logger
 		self.timeout = timeout
 		self.url = os.environ['URL']
-		rollbar.init(os.environ['ROLLBAR_KEY'], os.environ['ENVIRONMENT'])
+		rollbar.init(os.environ['ROLLBAR_KEY'], os.environ['ENV'])
 
 		self.init_db()
 
