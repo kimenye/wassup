@@ -3,18 +3,21 @@ from sqlalchemy.orm import sessionmaker
 from pubnub import Pubnub
 from datetime import datetime
 
-import os, base64, requests, json, vobject
+import os, base64, time, requests, json, vobject
 
 from Yowsup.connectionmanager import YowsupConnectionManager
 
 from models import Account, Message, Job
+from threading import Thread
 from util import get_phone_number, error_message, utc_to_local
 
 
-class Client:
-	def __init__(self, phone_number, logger):
+class Client(Thread):
+	def __init__(self, phone_number, logger, timeout):
+		super(Client, self).__init__()
 		self.phone_number = phone_number
 		self.logger = logger
+		self.timeout = timeout
 		self.url = os.environ['URL']
 
 		self.init_db()
@@ -39,6 +42,32 @@ class Client:
 		self.account = _session.query(Account).filter_by(phone_number = self.phone_number).scalar()
 		_session.commit()
 		self.password = self.account.whatsapp_password
+
+	def run(self):
+		resume = True
+		while (resume):
+			resume = self._poll()
+			time.sleep(15)
+
+				
+
+	def _poll(self):
+		# mark the start time
+		start = time.time()
+		self._i("Started the process thread at %s" %start)
+		
+		self.connect()
+		poll = True
+
+		while (poll):
+			now = time.time()
+			runtime = int(now - start)
+			self.work()
+			time.sleep(5)
+			poll = runtime < self.timeout
+			self._d("Disconnecting in %s seconds" %(self.timeout - runtime))
+		self.disconnect()
+		return True
 
 	def connect(self):
 		self.logger.info("Connecting")		

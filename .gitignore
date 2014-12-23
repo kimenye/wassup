@@ -33,6 +33,7 @@ pip-log.txt
 .env
 local_exec.sh
 poll.sh
+service.sh
 
 
 # Mac OS X

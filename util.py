@@ -11,14 +11,28 @@ def _d(self, message, account=None, debug=False):
 		logging.info("%s - %s" %(self.username, message))
 	else:
 		print("%s - %s" %(account, message))
-		logging.debug("%s - %s" %(account, message))	
+		logging.debug("%s - %s" %(account, message))
+
+def _is_verbose():
+	env = os.environ['ENV']
+	verbose = os.environ['VERBOSE']	
+
+	return _is_dev(env) or verbose == "true"
+
+def _is_dev(env):
+	return env == "development"
 
 def setup_logging(phone_number, env):
 	logger = logging.getLogger(__name__)
-	logger.setLevel(logging.DEBUG)
+	if _is_verbose():
+		logger.setLevel(logging.DEBUG)
 	
 	handler = logging.FileHandler("logs/%s.%s.log" %(phone_number, env))
-	handler.setLevel(logging.INFO)
+
+	if _is_verbose():
+		handler.setLevel(logging.INFO)
+	else:
+		handler.setLevel(logging.ERROR)
 
 	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 	handler.setFormatter(formatter)

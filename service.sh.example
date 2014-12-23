@@ -1,0 +1,17 @@
+#!/bin/bash
+export URL="http://localhost:3000"
+export SQLALCHEMY_DATABASE_URI=""
+export ROLLBAR_KEY=""
+export ENV="production"
+export PUB_KEY=""
+export SUB_KEY=""
+export PUB_CHANNEL="ongair_im_prod"
+export VERBOSE="false"
+
+# account="$1"
+timeout="$1"
+debug="$2"
+
+
+source venv/bin/activate
+python service.py "$timeout" "$debug"
