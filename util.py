@@ -1,7 +1,7 @@
 import os, rollbar, logging
 from datetime import datetime, timedelta
 
-rollbar.init(os.environ['ROLLBAR_KEY'], os.environ['ENV'])
+# rollbar.init(os.environ['ROLLBAR_KEY'], os.environ['ENV'])
 
 def error_message(message, type='warning'):
 	rollbar.report_message(message, type)
@@ -14,10 +14,11 @@ def _d(self, message, account=None, debug=False):
 		logging.debug("%s - %s" %(account, message))
 
 def _is_verbose():
-	env = os.environ['ENV']
-	verbose = os.environ['VERBOSE']	
+	# env = os.environ['ENV']
+	# verbose = os.environ['VERBOSE']	
 
-	return _is_dev(env) or verbose == "true"
+	# return _is_dev(env) or verbose == "true"
+	return True
 
 def _is_dev(env):
 	return env == "development"
@@ -38,8 +39,14 @@ def setup_logging(phone_number, env):
 	handler.setFormatter(formatter)
 
 	# add the handlers to the logger
+	yowstack_logger = logging.getLogger("yowsup.stacks.yowstack")
+	yowstack_logger.addHandler(handler)
+
+	media_logger = logging.getLogger("yowsup.layers.protocol_media.mediauploader")
+	media_logger.addHandler(handler)
 
 	logger.addHandler(handler)
+	
 	return logger
 
 def get_phone_number(jid):
