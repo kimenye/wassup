@@ -25,7 +25,7 @@ if len(sys.argv) >= 2:
 		_db = create_engine(url, echo=False, pool_size=15, pool_timeout=600,pool_recycle=600)
 		_session = sessionmaker(bind=_db)
 
-		accounts = _session().query(Account).filter_by(setup=True).all()
+		accounts = _session().query(Account).filter_by(setup=True, beta_user=False).all()
 		logger.info("Going to load %s accounts" %len(accounts))
 
 		for account in accounts:

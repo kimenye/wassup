@@ -11,6 +11,7 @@ class Account(Base):
 	phone_number = Column(String(255))
 	setup = Column(Boolean())
 	off_line = Column(Boolean())
+	beta_user = Column(Boolean())
 	name = Column(String(255))
 
 class Message(Base):
