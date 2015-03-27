@@ -72,9 +72,10 @@ class Client(Thread):
 		return True
 
 	def connect(self):
-		self.logger.info("Connecting")		
-		self.methodsInterface.call("auth_login", (self.phone_number, base64.b64decode(bytes(self.account.whatsapp_password.encode('utf-8')))))
-		self.connected = True
+		if self._accountIsActive():
+			self.logger.info("Connecting")		
+			self.methodsInterface.call("auth_login", (self.phone_number, base64.b64decode(bytes(self.account.whatsapp_password.encode('utf-8')))))
+			self.connected = True
 
 	def disconnect(self):
 		self._setStatus(0, "Disconected!")
@@ -212,6 +213,12 @@ class Client(Thread):
 		message = _session.query(Message).filter_by(whatsapp_message_id=whatsapp_message_id, account_id=self.account.id).scalar()
 		_session.commit()
 		return message is not None
+
+	def _accountIsActive(self):
+		_session = self.s()
+		account = _session.query(Account).filter_by(phone_number = self.phone_number, setup=True).scalar()
+		_session.commit()
+		return account is not None
 
 	def _sendRealtime(self, message):
 		if self.use_realtime:
